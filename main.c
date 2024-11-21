@@ -9,6 +9,8 @@ typedef struct Entity {Block box, spr;} Entity;
 #include <stdlib.h>
 #include <mylib.h>
 
+typedef struct Key {Block box; bool collected;} Key;
+
 enum Direction {
     NOWHERE,
     UP,
@@ -20,6 +22,10 @@ enum Direction {
 Entity player = {{.x = 320,.y = 256}, {.x = 320,.y = 256}};
 Entity crate = {{.x = 192,.y = 448}, {.x = 192,.y = 448}};
 Entity portals = {{.x = 0,.y = 0}, {.x = 640,.y = 640}};
+Key door = {{320, 384}, false};
+Key key = {{.x = 320,.y = 0}, false};
+char keysUI[30];
+int keys = 0;
 
 Camera2D camera = {
     .offset = (Vector2){ 800/2, 600/2},
@@ -33,12 +39,35 @@ int main(){
     int rows = 0, cols = 0;
     Array2D *map;
     LoadMap("map.txt", &rows, &cols, &map);
-    Texture2D texture = LoadTextureFromFile("images/Wall.png");
+
+    Texture2D keyTexture = LoadTextureFromFile("images/Key.png");
+    Texture2D wallTexture = LoadTextureFromFile("images/Wall.png");
+    Texture2D crateTexture = LoadTextureFromFile("images/Crate.png");
+    Texture2D doorOpTexture = LoadTextureFromFile("images/DoorOpened.png");
+    Texture2D doorLoTexture = LoadTextureFromFile("images/DoorLocked.png");
+
+    //Animation data
+    Image playerSprites = LoadImage("images/PlayerSprites.png");
+    ImageResizeNN(&playerSprites, tileSize*2, tileSize);
+    Texture2D anim = LoadTextureFromImage(playerSprites);
+    UnloadImage(playerSprites);
+    Rectangle frameRec = { 0.0f, 0.0f, (float)anim.width/2, (float)anim.height };
+    int currentFrame = 0, framesCounter = 0;
 
     while (!WindowShouldClose()){
+        //Basic Animation
+        int framesSpeed = (speed-1) * 2;
+        framesCounter++;
+        if (framesCounter >= (60/framesSpeed)){
+            framesCounter = 0;
+            currentFrame++;
+            if (currentFrame > 1) currentFrame = 0;
+            frameRec.x = (float)currentFrame*(float)anim.width/2;
+        }
+
         BeginDrawing();
         ClearBackground(BLACK);
-        
+
         camera.target = (Vector2){ player.spr.x + 32.0f, player.spr.y + 32.0f },
         BeginMode2D(camera);
 
@@ -46,7 +75,7 @@ int main(){
         for (int i = 0; i <= rows; i++){
             for (int j = 0; j < cols; j++){
                 if (map->array[i][j] == '1'){
-                    DrawTexture(texture, j*tileSize, i*tileSize, BROWN);
+                    DrawTexture(wallTexture, j*tileSize, i*tileSize, GRAY);
                 }
             }
         }
@@ -54,7 +83,23 @@ int main(){
         //Draw other objects
         DrawEntity(portals, BLUE, GREEN);
         DrawEntity(player, GRAY, RED);
+
+        if (!key.collected){
+            DrawTexture(keyTexture, key.box.x, key.box.y, YELLOW);
+        }
+
+        if (!door.collected){
+            DrawTexture(doorLoTexture, door.box.x, door.box.y, WHITE);
+        } else {
+            DrawTexture(doorOpTexture, door.box.x, door.box.y, WHITE);
+        }
+
+        DrawTextureRec(anim, frameRec, (Vector2){(float)player.spr.x, (float)player.spr.y}, BLUE);
         DrawEntity(crate, WHITE, BROWN);
+        DrawTexture(crateTexture, crate.spr.x, crate.spr.y, BROWN);
+
+        sprintf(keysUI, "Keys: %d", keys);
+        DrawText(keysUI, player.spr.x+280, player.spr.y+280, 30, WHITE);
 
         speed = 2 * (IsKeyDown(KEY_LEFT_SHIFT) + 1);
 
@@ -113,7 +158,7 @@ int main(){
             }
         }
 
-        //Collision testing
+        //Collision testing wall
         int gridY = player.box.y / tileSize;
         int gridX = player.box.x / tileSize;
 
@@ -125,6 +170,22 @@ int main(){
             player.box.x = player.spr.x;
             player.box.y = player.spr.y;
             timer = 0;
+        }
+
+        //Collision testing door
+        if (
+            player.box.y == door.box.y &&
+            player.box.x == door.box.x &&
+            !door.collected
+        ){
+            if (keys){
+                door.collected = true;
+                keys--;
+            } else {
+                player.box.x = player.spr.x;
+                player.box.y = player.spr.y;
+                timer = 0;
+            }
         }
 
         //Smooth movement animation
@@ -155,10 +216,10 @@ int main(){
         // Collide with portals
         if (
             player.box.y == player.spr.y &&
-            player.box.x == player.spr.x && 
+            player.box.x == player.spr.x &&
             ((player.box.y == portals.box.y && player.box.x == portals.box.x) ||
             (player.box.y == portals.spr.y && player.box.x == portals.spr.x))
-        ) {
+        ){
             int portalY = (player.box.y == portals.box.y) ? portals.spr.y : portals.box.y;
             int portalX = (player.box.x == portals.box.x) ? portals.spr.x : portals.box.x;
 
@@ -169,11 +230,25 @@ int main(){
             timer = tileSize;
         }
 
+        //Collect key
+        if (
+            player.spr.y == key.box.y &&
+            player.spr.x == key.box.x &&
+            !key.collected
+        ){
+            key.collected = true;
+            keys++;
+        }
+
         EndMode2D();
         EndDrawing();
     }
 
-    UnloadTexture(texture);
+    UnloadTexture(wallTexture);
+    UnloadTexture(crateTexture);
+    UnloadTexture(doorOpTexture);
+    UnloadTexture(doorLoTexture);
+    UnloadTexture(anim);
     free2DArray(map);
     CloseWindow();
     return 0;

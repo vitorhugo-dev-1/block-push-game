@@ -11,6 +11,7 @@
 	"files.associations": {
 		"raylib.h": "c",
 		"stdio.h": "c",
-		"*.txt": "cpp"
+		"mylib.h": "c",
+		"stdlib.h": "c"
 	}
 }
