@@ -1,44 +1,56 @@
-int tileSize = 64, speed = 2, timer = 0;
-
-typedef struct Block {int x, y;} Block;
-typedef struct Entity {Block box, spr;} Entity;
-//typedef struct Portals {Block entry, exit;} Portals;
+#define TILE_SIZE 64
 
 #include <raylib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <mylib.h>
 
-typedef struct Key {Block box; bool collected;} Key;
-
-enum Direction {
-    NOWHERE,
-    UP,
-    DOWN,
-    RIGHT,
-    LEFT,
-} goToDir;
-
-Entity player = {{.x = 320,.y = 256}, {.x = 320,.y = 256}};
-Entity crate = {{.x = 192,.y = 448}, {.x = 192,.y = 448}};
-Entity portals = {{.x = 0,.y = 0}, {.x = 640,.y = 640}};
-Key door = {{320, 384}, false};
-Key key = {{.x = 320,.y = 0}, false};
-char keysUI[30];
-int keys = 0;
-
-Camera2D camera = {
-    .offset = (Vector2){ 800/2, 600/2},
-    .zoom = 1
-};
-
 int main(){
+    int speed = 2, timer = 0;
+    enum Direction goToDir = NOWHERE;
+
+    Entity player;
+    
+    EntityArr crates;
+    crates.size = 0;
+    
+    Entity portals = {{.x = 0,.y = 0}, {.x = 640,.y = 640}};
+    Key door = {{320, 384}, false};
+    Key key = {{.x = 320,.y = 0}, false};
+
+    char keysUI[30];
+    int keys = 0;
+
+    Camera2D camera = {
+        .offset = (Vector2){ 800/2, 600/2},
+        .zoom = 1
+    };
+
     InitWindow(800, 600, "Hello World");
     SetTargetFPS(60);
 
     int rows = 0, cols = 0;
     Array2D *map;
-    LoadMap("map.txt", &rows, &cols, &map);
+    LoadMap("map.csv", &rows, &cols, &map);
+
+    //Create objects
+
+    for (int i = 0; i <= rows; i++){
+        for (int j = 0; j < cols; j++){
+            int currentValue = map->array[i][j] - '0';
+            switch (currentValue){
+                case PLAYER:
+                    player.spr.y = player.box.y = i * TILE_SIZE;
+                    player.spr.x = player.box.x = j * TILE_SIZE;
+                    break;
+                case CRATE:
+                    Entity newElement = {{j * TILE_SIZE, i * TILE_SIZE}, {j * TILE_SIZE, i * TILE_SIZE}};
+                    crates.instance = Append(crates.instance, crates.size, newElement);
+                    crates.size++;
+                    break;
+            }
+        }
+    }
 
     Texture2D keyTexture = LoadTextureFromFile("images/Key.png");
     Texture2D wallTexture = LoadTextureFromFile("images/Wall.png");
@@ -48,7 +60,7 @@ int main(){
 
     //Animation data
     Image playerSprites = LoadImage("images/PlayerSprites.png");
-    ImageResizeNN(&playerSprites, tileSize*2, tileSize);
+    ImageResizeNN(&playerSprites, TILE_SIZE*2, TILE_SIZE);
     Texture2D anim = LoadTextureFromImage(playerSprites);
     UnloadImage(playerSprites);
     Rectangle frameRec = { 0.0f, 0.0f, (float)anim.width/2, (float)anim.height };
@@ -74,8 +86,8 @@ int main(){
         //Draw Walls
         for (int i = 0; i <= rows; i++){
             for (int j = 0; j < cols; j++){
-                if (map->array[i][j] == '1'){
-                    DrawTexture(wallTexture, j*tileSize, i*tileSize, GRAY);
+                if (map->array[i][j] == '2'){
+                    DrawTexture(wallTexture, j*TILE_SIZE, i*TILE_SIZE, GRAY);
                 }
             }
         }
@@ -95,8 +107,11 @@ int main(){
         }
 
         DrawTextureRec(anim, frameRec, (Vector2){(float)player.spr.x, (float)player.spr.y}, BLUE);
-        DrawEntity(crate, WHITE, BROWN);
-        DrawTexture(crateTexture, crate.spr.x, crate.spr.y, BROWN);
+
+        for (int i = 0; i < crates.size; i++){
+            DrawEntity(crates.instance[i], WHITE, BROWN);
+            DrawTexture(crateTexture, crates.instance[i].spr.x, crates.instance[i].spr.y, BROWN);
+        }
 
         sprintf(keysUI, "Keys: %d", keys);
         DrawText(keysUI, player.spr.x+280, player.spr.y+280, 30, WHITE);
@@ -129,47 +144,63 @@ int main(){
                     break;
             }
 
-            player.box.y += (((goToDir == UP)*-1) + (goToDir == DOWN)) * tileSize;
-            player.box.x += (((goToDir == LEFT)*-1) + (goToDir == RIGHT)) * tileSize;
-            timer = tileSize;
+            player.box.y += (((goToDir == UP)*-1) + (goToDir == DOWN)) * TILE_SIZE;
+            player.box.x += (((goToDir == LEFT)*-1) + (goToDir == RIGHT)) * TILE_SIZE;
+            timer = TILE_SIZE;
+            printf("P: [%d, %d] - %d\n", (player.box.y/TILE_SIZE), (player.box.x/TILE_SIZE), IsInsideMap((Block){player.box.x/TILE_SIZE, player.box.y/TILE_SIZE}, *map));
         }
 
-        //Move/Collide with crate
-        if (player.box.y == crate.box.y && player.box.x == crate.box.x){
-            if (player.box.y != player.spr.y){
-                crate.box.y += IsHigherOrLower(player.box.y, player.spr.y) * tileSize;
-            } else if (player.box.x != player.spr.x){
-                crate.box.x += IsHigherOrLower(player.box.x, player.spr.x) * tileSize;
+        //Collision testing
+        int gridX = player.box.x / TILE_SIZE;
+        int gridY = player.box.y / TILE_SIZE;
+
+        if (IsInsideMap((Block){gridX, gridY}, *map)){
+            switch (map->array[gridY][gridX] - '0'){
+                case WALL:
+                    player.box.x = player.spr.x;
+                    player.box.y = player.spr.y;
+                    timer = 0;
+                    break;
+
+                case CRATE:
+                    for (int i = 0; i < crates.size; i++){
+                        if (
+                            crates.instance[i].box.x == player.box.x &&
+                            crates.instance[i].box.y == player.box.y
+                        ){
+                            if (
+                                player.box.y != player.spr.y ||
+                                player.box.x != player.spr.x
+                            ){
+                                crates.instance[i].box.y += IsHigherOrLower(player.box.y, player.spr.y) * TILE_SIZE;
+                                crates.instance[i].box.x += IsHigherOrLower(player.box.x, player.spr.x) * TILE_SIZE;
+                            }
+
+                            int crateY = crates.instance[i].box.y / TILE_SIZE;
+                            int crateX = crates.instance[i].box.x / TILE_SIZE;
+
+                            if (
+                                IsInsideMap((Block){crateX, crateY}, *map) &&
+                                (
+                                    map->array[crateY][crateX]-'0' == WALL ||
+                                    map->array[crateY][crateX]-'0' == CRATE ||
+                                    map->array[crateY][crateX]-'0' == DOOR
+                                )
+                            ){
+                                player.box.x = player.spr.x;
+                                player.box.y = player.spr.y;
+                                crates.instance[i].box.x = crates.instance[i].spr.x;
+                                crates.instance[i].box.y = crates.instance[i].spr.y;
+                                timer = 0;
+                            } else {
+                                map->array[gridY][gridX] = '1';
+                                map->array[gridY+IsHigherOrLower(crateY, gridY)][gridX+IsHigherOrLower(crateX, gridX)] = '3';
+                                printf("C: [%d, %d]\n", crateX, crateY);
+                            }
+                        }
+                    }
+                    break;
             }
-
-            int gridY = crate.box.y / tileSize;
-            int gridX = crate.box.x / tileSize;
-
-            if (
-                gridY > 0 && gridY <= rows &&
-                gridX > 0 && gridX <= cols &&
-                map->array[gridY][gridX] == '1'
-            ){
-                player.box.x = player.spr.x;
-                player.box.y = player.spr.y;
-                crate.box.x = crate.spr.x;
-                crate.box.y = crate.spr.y;
-                timer = 0;
-            }
-        }
-
-        //Collision testing wall
-        int gridY = player.box.y / tileSize;
-        int gridX = player.box.x / tileSize;
-
-        if (
-            gridY > 0 && gridY <= rows &&
-            gridX > 0 && gridX <= cols &&
-            map->array[gridY][gridX] == '1'
-        ){
-            player.box.x = player.spr.x;
-            player.box.y = player.spr.y;
-            timer = 0;
         }
 
         //Collision testing door
@@ -192,11 +223,16 @@ int main(){
         if (player.spr.y != player.box.y || player.spr.x != player.box.x){
             if (timer > 0){
                 //Animate crate
-                if (crate.spr.y != crate.box.y){
-                    crate.spr.y += IsHigherOrLower(crate.box.y, crate.spr.y) * speed;
-                } else if (crate.spr.x != crate.box.x){
-                    crate.spr.x += IsHigherOrLower(crate.box.x, crate.spr.x) * speed;
+                for (int i = 0; i < crates.size; i++){
+                    if (
+                        crates.instance[i].box.x != crates.instance[i].spr.x ||
+                        crates.instance[i].box.y != crates.instance[i].spr.y
+                    ){
+                        crates.instance[i].spr.y += IsHigherOrLower(crates.instance[i].box.y, crates.instance[i].spr.y) * speed;
+                        crates.instance[i].spr.x += IsHigherOrLower(crates.instance[i].box.x, crates.instance[i].spr.x) * speed;
+                    }
                 }
+
                 //Animate player
                 if (player.spr.y != player.box.y){
                     player.spr.y += IsHigherOrLower(player.box.y, player.spr.y) * speed;
@@ -207,8 +243,17 @@ int main(){
             } else {
                 player.spr.y = player.box.y;
                 player.spr.x = player.box.x;
-                crate.box.x = crate.spr.x;
-                crate.box.y = crate.spr.y;
+
+                for (int i = 0; i < crates.size; i++){
+                    if (
+                        crates.instance[i].box.x != crates.instance[i].spr.x ||
+                        crates.instance[i].box.y != crates.instance[i].spr.y
+                    ){
+                        crates.instance[i].box.x = crates.instance[i].spr.x;
+                        crates.instance[i].box.y = crates.instance[i].spr.y;
+                    }
+                }
+
                 timer = 0;
             }
         }
@@ -217,17 +262,19 @@ int main(){
         if (
             player.box.y == player.spr.y &&
             player.box.x == player.spr.x &&
-            ((player.box.y == portals.box.y && player.box.x == portals.box.x) ||
-            (player.box.y == portals.spr.y && player.box.x == portals.spr.x))
+            (
+                (player.box.y == portals.box.y && player.box.x == portals.box.x) ||
+                (player.box.y == portals.spr.y && player.box.x == portals.spr.x)
+            )
         ){
             int portalY = (player.box.y == portals.box.y) ? portals.spr.y : portals.box.y;
             int portalX = (player.box.x == portals.box.x) ? portals.spr.x : portals.box.x;
 
             player.spr.y = portalY;
             player.spr.x = portalX;
-            player.box.y = portalY + (((goToDir == UP) * -1) + (goToDir == DOWN)) * tileSize;
-            player.box.x = portalX + (((goToDir == LEFT) * -1) + (goToDir == RIGHT)) * tileSize;
-            timer = tileSize;
+            player.box.y = portalY + (((goToDir == UP) * -1) + (goToDir == DOWN)) * TILE_SIZE;
+            player.box.x = portalX + (((goToDir == LEFT) * -1) + (goToDir == RIGHT)) * TILE_SIZE;
+            timer = TILE_SIZE;
         }
 
         //Collect key
@@ -249,7 +296,8 @@ int main(){
     UnloadTexture(doorOpTexture);
     UnloadTexture(doorLoTexture);
     UnloadTexture(anim);
-    free2DArray(map);
+    Free2DArray(map);
+    free(crates.instance);
     CloseWindow();
     return 0;
 }
