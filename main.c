@@ -3,51 +3,71 @@
 #include <raylib.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <mylib.h>
 
 int main(){
     int speed = 2, timer = 0;
-    enum Direction goToDir = NOWHERE;
+    
+    char keysUI[] = "Keys: 0";
+    int counterKeys = 0;
+
+    Direction goToDir = NOWHERE;
+
+    Array2D map;
+    LoadMap("map.csv", &map);
 
     Entity player;
-    
-    EntityArr crates;
-    crates.size = 0;
-    
-    Entity portals = {{.x = 0,.y = 0}, {.x = 640,.y = 640}};
-    Key door = {{320, 384}, false};
-    Key key = {{.x = 320,.y = 0}, false};
 
-    char keysUI[30];
-    int keys = 0;
+    BlockArr walls = {NULL, 0};
+    EntityArr crates = {NULL, 0};
+    ItemArr doors = {NULL, 0};
+    ItemArr keys = {NULL, 0};
+
+    Entity portals = {{.x = 0,.y = 0}, {.x = 640,.y = 640}};
 
     Camera2D camera = {
         .offset = (Vector2){ 800/2, 600/2},
         .zoom = 1
     };
 
-    InitWindow(800, 600, "Hello World");
+    InitWindow(800, 600, "Project");
     SetTargetFPS(60);
 
-    int rows = 0, cols = 0;
-    Array2D *map;
-    LoadMap("map.csv", &rows, &cols, &map);
-
-    //Create objects
-
-    for (int i = 0; i <= rows; i++){
-        for (int j = 0; j < cols; j++){
-            int currentValue = map->array[i][j] - '0';
+    //Load objects from map
+    for (int i = 0; i <= map.rows; i++){
+        for (int j = 0; j < map.cols; j++){
+            int currentValue = map.array[i][j] - '0';
             switch (currentValue){
-                case PLAYER:
+                case PLAYER:{
                     player.spr.y = player.box.y = i * TILE_SIZE;
                     player.spr.x = player.box.x = j * TILE_SIZE;
                     break;
-                case CRATE:
-                    Entity newElement = {{j * TILE_SIZE, i * TILE_SIZE}, {j * TILE_SIZE, i * TILE_SIZE}};
-                    crates.instance = Append(crates.instance, crates.size, newElement);
+                }
+                case WALL:{
+                    Block new_wall = {j * TILE_SIZE, i * TILE_SIZE};
+                    walls.instance = (Block*)AppendElement(walls.instance, sizeof(Block), walls.size, &new_wall);
+                    walls.size++;
+                    break;
+                }
+                case CRATE:{
+                    Entity new_crate = {{j * TILE_SIZE, i * TILE_SIZE}, {j * TILE_SIZE, i * TILE_SIZE}};
+                    crates.instance = (Entity*)AppendElement(crates.instance, sizeof(Entity), crates.size, &new_crate);
                     crates.size++;
                     break;
+                }
+                case DOOR:{
+                    Item new_door = {{j * TILE_SIZE, i * TILE_SIZE}, 0};
+                    doors.instance = (Item*)AppendElement(doors.instance, sizeof(Item), doors.size, &new_door);
+                    doors.size++;
+                    break;
+                }
+                case KEY:{
+                    Item new_key = {{j * TILE_SIZE, i * TILE_SIZE}, 0};
+                    keys.instance = (Item*)AppendElement(keys.instance, sizeof(Item), keys.size, &new_key);
+                    keys.size++;
+                    break;
+                }
             }
         }
     }
@@ -67,56 +87,57 @@ int main(){
     int currentFrame = 0, framesCounter = 0;
 
     while (!WindowShouldClose()){
+        camera.target = (Vector2){ player.spr.x + 32.0f, player.spr.y + 32.0f };
+
+        //Start rendering
+        BeginDrawing();
+        ClearBackground(BLACK);
+        BeginMode2D(camera);
+
         //Basic Animation
-        int framesSpeed = (speed-1) * 2;
         framesCounter++;
-        if (framesCounter >= (60/framesSpeed)){
+        if (framesCounter >= (60/speed)){
             framesCounter = 0;
             currentFrame++;
             if (currentFrame > 1) currentFrame = 0;
             frameRec.x = (float)currentFrame*(float)anim.width/2;
         }
 
-        BeginDrawing();
-        ClearBackground(BLACK);
-
-        camera.target = (Vector2){ player.spr.x + 32.0f, player.spr.y + 32.0f },
-        BeginMode2D(camera);
-
         //Draw Walls
-        for (int i = 0; i <= rows; i++){
-            for (int j = 0; j < cols; j++){
-                if (map->array[i][j] == '2'){
-                    DrawTexture(wallTexture, j*TILE_SIZE, i*TILE_SIZE, GRAY);
-                }
+        for (int i = 0; i < walls.size; i++){
+            DrawTexture(wallTexture, walls.instance[i].x, walls.instance[i].y, GRAY);
+        }
+        
+        //Draw doors
+        for (int i = 0; i < doors.size; i++){
+            if (doors.instance[i].active){
+                DrawTexture(doorOpTexture, doors.instance[i].position.x, doors.instance[i].position.y, WHITE);
+                continue;
+            }
+            DrawTexture(doorLoTexture, doors.instance[i].position.x, doors.instance[i].position.y, WHITE);
+        }
+
+        //Draw keys
+        for (int i = 0; i < keys.size; i++){
+            if (!keys.instance[i].active){
+                DrawTexture(keyTexture, keys.instance[i].position.x, keys.instance[i].position.y, YELLOW);
             }
         }
 
         //Draw other objects
         DrawEntity(portals, BLUE, GREEN);
+
+        //Draw Player
         DrawEntity(player, GRAY, RED);
-
-        if (!key.collected){
-            DrawTexture(keyTexture, key.box.x, key.box.y, YELLOW);
-        }
-
-        if (!door.collected){
-            DrawTexture(doorLoTexture, door.box.x, door.box.y, WHITE);
-        } else {
-            DrawTexture(doorOpTexture, door.box.x, door.box.y, WHITE);
-        }
-
         DrawTextureRec(anim, frameRec, (Vector2){(float)player.spr.x, (float)player.spr.y}, BLUE);
 
+        //Draw crates
         for (int i = 0; i < crates.size; i++){
             DrawEntity(crates.instance[i], WHITE, BROWN);
             DrawTexture(crateTexture, crates.instance[i].spr.x, crates.instance[i].spr.y, BROWN);
         }
 
-        sprintf(keysUI, "Keys: %d", keys);
         DrawText(keysUI, player.spr.x+280, player.spr.y+280, 30, WHITE);
-
-        speed = 2 * (IsKeyDown(KEY_LEFT_SHIFT) + 1);
 
         int moveKeys[] = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_S, KEY_A, KEY_D, -1};
         int keyPressed = IsAnyOfKeysPressed(moveKeys);
@@ -147,15 +168,15 @@ int main(){
             player.box.y += (((goToDir == UP)*-1) + (goToDir == DOWN)) * TILE_SIZE;
             player.box.x += (((goToDir == LEFT)*-1) + (goToDir == RIGHT)) * TILE_SIZE;
             timer = TILE_SIZE;
-            printf("P: [%d, %d] - %d\n", (player.box.y/TILE_SIZE), (player.box.x/TILE_SIZE), IsInsideMap((Block){player.box.x/TILE_SIZE, player.box.y/TILE_SIZE}, *map));
+            printf("P: [%d, %d] - %d\n", (player.box.y/TILE_SIZE), (player.box.x/TILE_SIZE), IsInsideMap((Block){player.box.x/TILE_SIZE, player.box.y/TILE_SIZE}, map));
         }
 
         //Collision testing
         int gridX = player.box.x / TILE_SIZE;
         int gridY = player.box.y / TILE_SIZE;
 
-        if (IsInsideMap((Block){gridX, gridY}, *map)){
-            switch (map->array[gridY][gridX] - '0'){
+        if (IsInsideMap((Block){gridX, gridY}, map)){
+            switch (map.array[gridY][gridX] - '0'){
                 case WALL:
                     player.box.x = player.spr.x;
                     player.box.y = player.spr.y;
@@ -180,11 +201,11 @@ int main(){
                             int crateX = crates.instance[i].box.x / TILE_SIZE;
 
                             if (
-                                IsInsideMap((Block){crateX, crateY}, *map) &&
+                                IsInsideMap((Block){crateX, crateY}, map) &&
                                 (
-                                    map->array[crateY][crateX]-'0' == WALL ||
-                                    map->array[crateY][crateX]-'0' == CRATE ||
-                                    map->array[crateY][crateX]-'0' == DOOR
+                                    map.array[crateY][crateX]-'0' == WALL ||
+                                    map.array[crateY][crateX]-'0' == CRATE ||
+                                    map.array[crateY][crateX]-'0' == DOOR
                                 )
                             ){
                                 player.box.x = player.spr.x;
@@ -193,8 +214,8 @@ int main(){
                                 crates.instance[i].box.y = crates.instance[i].spr.y;
                                 timer = 0;
                             } else {
-                                map->array[gridY][gridX] = '1';
-                                map->array[gridY+IsHigherOrLower(crateY, gridY)][gridX+IsHigherOrLower(crateX, gridX)] = '3';
+                                map.array[gridY][gridX] = '1';
+                                map.array[gridY+IsHigherOrLower(crateY, gridY)][gridX+IsHigherOrLower(crateX, gridX)] = '3';
                                 printf("C: [%d, %d]\n", crateX, crateY);
                             }
                         }
@@ -204,15 +225,19 @@ int main(){
         }
 
         //Collision testing door
-        if (
-            player.box.y == door.box.y &&
-            player.box.x == door.box.x &&
-            !door.collected
-        ){
-            if (keys){
-                door.collected = true;
-                keys--;
-            } else {
+        for (int i = 0; i < doors.size; i++){
+            if (
+                player.box.y == doors.instance[i].position.y &&
+                player.box.x == doors.instance[i].position.x &&
+                !doors.instance[i].active
+            ){
+                if (counterKeys){
+                    doors.instance[i].active = true;
+                    counterKeys--;
+                    sprintf(keysUI, "Keys: %d", counterKeys);
+                    break;
+                }
+
                 player.box.x = player.spr.x;
                 player.box.y = player.spr.y;
                 timer = 0;
@@ -220,6 +245,7 @@ int main(){
         }
 
         //Smooth movement animation
+        speed = 2 * (IsKeyDown(KEY_LEFT_SHIFT) + 1);
         if (player.spr.y != player.box.y || player.spr.x != player.box.x){
             if (timer > 0){
                 //Animate crate
@@ -278,13 +304,16 @@ int main(){
         }
 
         //Collect key
-        if (
-            player.spr.y == key.box.y &&
-            player.spr.x == key.box.x &&
-            !key.collected
-        ){
-            key.collected = true;
-            keys++;
+        for (int i = 0; i < keys.size; i++){
+            if (
+                player.spr.y == keys.instance[i].position.y &&
+                player.spr.x == keys.instance[i].position.x &&
+                !keys.instance[i].active
+            ){
+                keys.instance[i].active = true;
+                counterKeys++;
+                sprintf(keysUI, "Keys: %d", counterKeys);
+            }
         }
 
         EndMode2D();
@@ -296,7 +325,7 @@ int main(){
     UnloadTexture(doorOpTexture);
     UnloadTexture(doorLoTexture);
     UnloadTexture(anim);
-    Free2DArray(map);
+    Free2DArray(&map);
     free(crates.instance);
     CloseWindow();
     return 0;
