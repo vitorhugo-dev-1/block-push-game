@@ -10,6 +10,7 @@ typedef struct BlockArr {Block *instance; int length;} BlockArr;
 typedef struct EntityArr {Entity *instance; int length;} EntityArr;
 typedef struct PortalsArr {Portals *instance; int length;} PortalsArr;
 typedef struct ItemArr {Item *instance; int length;} ItemArr;
+typedef struct TextureData {Texture2D texture; char filename[256];} TextureData;
 
 typedef enum Dictionary {
     EMPTY,
@@ -18,7 +19,8 @@ typedef enum Dictionary {
     CRATE,
     PORTAL,
     DOOR,
-    KEY
+    KEY,
+    END
 } Dictionary;
 
 typedef enum Direction {
@@ -68,8 +70,8 @@ int IsAnyOfKeysPressed(int *keys) {
 }
 
 //Function to create an array with csv cell values for the CSV struct
-void LoadCSV(const char *fileName, CSV *csv, int cellSize){
-    FILE *file = fopen(fileName, "r");
+void LoadCSV(const char *file_name, CSV *csv, int cell_size){
+    FILE *file = fopen(file_name, "r");
     if (file == NULL) Error("Unable to open file\n");
 
     // First pass to get the dimensions of the CSV
@@ -92,7 +94,7 @@ void LoadCSV(const char *fileName, CSV *csv, int cellSize){
         if (csv->array[i] == NULL) Error("Memory allocation failed for columns");
 
         for (int j = 0; j < csv->cols; j++){
-            csv->array[i][j] = (char *)malloc((cellSize+1) * sizeof(char));
+            csv->array[i][j] = (char *)malloc((cell_size+1) * sizeof(char));
             if (csv->array[i][j] == NULL) Error("Memory allocation failed for elements");
         }
     }
@@ -111,7 +113,7 @@ void LoadCSV(const char *fileName, CSV *csv, int cellSize){
             digit = 0;
         } else {
             csv->array[csv->rows][csv->cols][digit] = ch;
-            if (digit == cellSize-1){
+            if (digit == cell_size-1){
                 csv->array[csv->rows][csv->cols][digit+1] = '\0';
             }
             digit++;
@@ -134,9 +136,13 @@ void FreeCSV(CSV *csv){
 }
 
 // Function to load an image and return a texture
-Texture2D LoadTextureFromFile(const char *fileName) {
-    Image image = LoadImage(fileName);
-    ImageResizeNN(&image, TILE_SIZE, TILE_SIZE);
+Texture2D LoadTextureFromFile(const char *file_name){
+    Image image = LoadImage(file_name);
+    if (image.width > 16 || image.height > 16){
+        ImageResizeNN(&image, image.width*4, image.height*4);
+    } else {
+        ImageResizeNN(&image, TILE_SIZE, TILE_SIZE);
+    }
     Texture2D texture = LoadTextureFromImage(image);  // Convert image to texture
     UnloadImage(image);  // Unload image from CPU memory (image data is now in GPU memory)
     return texture;
@@ -147,13 +153,6 @@ void DrawEntity(Entity entity, Color color1, Color color2){
     DrawRectangle(entity.box.x, entity.box.y, TILE_SIZE, TILE_SIZE, color1);
     DrawRectangle(entity.spr.x, entity.spr.y, TILE_SIZE, TILE_SIZE, color2);
 }
-
-//Draws a pair of portals
-void DrawPortal(Portals portals, Color color1, Color color2){
-    DrawRectangle(portals.entrance.x, portals.entrance.y, TILE_SIZE, TILE_SIZE, color1);
-    DrawRectangle(portals.exit.x, portals.exit.y, TILE_SIZE, TILE_SIZE, color2);
-}
-
 
 //Append element to the end of array
 void* AppendElement(void* array, int byte_size, int length, void* new_element){
@@ -166,8 +165,177 @@ void* AppendElement(void* array, int byte_size, int length, void* new_element){
 }
 
 //Clamp function to restrict a value within a specified range
-float Clamp(float value, float min, float max) {
+float Clamp(float value, float min, float max){
     if (value < min) return min;
     if (value > max) return max;
     return value;
+}
+
+//Loads into an array a map object that's not directly linked to any other object in the same map
+void LoadSingularObject(void *data[], const char *object_type, int y, int x){
+    Entity *player = (Entity *)data[PLAYER];
+    BlockArr *walls = (BlockArr *)data[WALL];
+    EntityArr *crates = (EntityArr *)data[CRATE];
+    ItemArr *doors = (ItemArr *)data[DOOR];
+    ItemArr *keys = (ItemArr *)data[KEY];
+
+    switch (atoi(object_type)){
+        case PLAYER:{
+            player->spr.y = player->box.y = y * TILE_SIZE;
+            player->spr.x = player->box.x = x * TILE_SIZE;
+            break;
+        }
+        case WALL:{
+            Block new_wall = {x * TILE_SIZE, y * TILE_SIZE};
+            walls->instance = (Block *)AppendElement(walls->instance, sizeof(Block), walls->length, &new_wall);
+            walls->length++;
+            break;
+        }
+        case CRATE:{
+            Entity new_crate = {{x * TILE_SIZE, y * TILE_SIZE}, {x * TILE_SIZE, y * TILE_SIZE}};
+            crates->instance = (Entity *)AppendElement(crates->instance, sizeof(Entity), crates->length, &new_crate);
+            crates->length++;
+            break;
+        }
+        case DOOR:{
+            Item new_door = {{x * TILE_SIZE, y * TILE_SIZE}, 0};
+            doors->instance = (Item *)AppendElement(doors->instance, sizeof(Item), doors->length, &new_door);
+            doors->length++;
+            break;
+        }
+        case KEY:{
+            Item new_key = {{x * TILE_SIZE, y * TILE_SIZE}, 0};
+            keys->instance = (Item *)AppendElement(keys->instance, sizeof(Item), keys->length, &new_key);
+            keys->length++;
+            break;
+        }
+    }
+}
+
+//Loads into an array a map object that's directly linked to another one in the same map
+void LoadLinkedObject(void *data[], const char *object_type, int y, int x){
+    PortalsArr *portals = (PortalsArr *)data[PORTAL];
+
+    switch (object_type[0]){
+        case 'P':
+            int index = object_type[1] - '0';
+            Portals new_portal = {{x * TILE_SIZE, y * TILE_SIZE}, {-1, -1}};
+
+            if (!portals->length) {
+                portals->instance = (Portals*)AppendElement(portals->instance, sizeof(Portals), portals->length, &new_portal);
+                portals->length++;
+                return;
+            }
+
+            if (portals->instance[index].exit.x == -1 || portals->instance[index].exit.y == -1) {
+                portals->instance[index].exit.x = x * TILE_SIZE;
+                portals->instance[index].exit.y = y * TILE_SIZE;
+            } else {
+                portals->instance = (Portals*)AppendElement(portals->instance, sizeof(Portals), portals->length, &new_portal);
+                portals->length++;
+            }
+            break;
+    }
+}
+
+//Loads all data inside a CSV into their specific arrays
+void LoadData(void *data[], CSV *map){
+    for (int y = 0; y < map->rows; y++){
+        for (int x = 0; x < map->cols; x++){
+            if (isdigit(*map->array[y][x])){
+                LoadSingularObject(data, map->array[y][x], y, x);
+            } else {
+                LoadLinkedObject(data, map->array[y][x], y, x);
+            }
+        }
+    }
+}
+
+//Loads all images from a folder into an array of textures
+int LoadTexturesFromFolder(const char *folder_path, TextureData *textures, int max_textures) {
+    int texture_count = 0;
+
+    // Open directory
+    DIR *dir = opendir(folder_path);
+    if (dir == NULL) Error("Could not open texture directory.\n");
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL && texture_count < max_textures){
+        // Skip current and parent directory entries
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+
+        // Construct full file path
+        char file_path[512];
+        snprintf(file_path, sizeof(file_path), "%s/%s", folder_path, entry->d_name);
+
+        // Load texture
+        textures[texture_count].texture = LoadTextureFromFile(file_path);
+        strncpy(textures[texture_count].filename, entry->d_name, sizeof(textures[texture_count].filename) - 1);
+        texture_count++;
+    }
+    closedir(dir);
+
+    return texture_count;
+}
+
+//Draws every element from the loaded map
+void DrawMap(void *data[], TextureData textures[], Rectangle player_frameRec, float *rotation, int *counter){
+    Entity *player = (Entity *)data[PLAYER];
+    BlockArr *walls = (BlockArr *)data[WALL];
+    ItemArr *doors = (ItemArr *)data[DOOR];
+    ItemArr *keys = (ItemArr *)data[KEY];
+    PortalsArr *portals = (PortalsArr *)data[PORTAL];
+    EntityArr *crates = (EntityArr *)data[CRATE];
+
+    //Draw Walls
+    for (int i = 0; i < walls->length; i++){
+        DrawTexture(textures[WALL].texture, walls->instance[i].x, walls->instance[i].y, GRAY);
+    }
+
+    //Draw Doors
+    Rectangle door_frameRec = { 0.0f, 0.0f, (float)textures[DOOR].texture.width/2, (float)textures[DOOR].texture.height };
+    for (int i = 0; i < doors->length; i++){
+        door_frameRec.x = 0;
+        if (doors->instance[i].active) door_frameRec.x = 64;
+        DrawTextureRec(textures[DOOR].texture, door_frameRec, (Vector2){(float)doors->instance[i].position.x, (float)doors->instance[i].position.y}, WHITE);
+    }
+
+    //Draw Keys
+    for (int i = 0; i < keys->length; i++){
+        if (!keys->instance[i].active){
+            DrawTexture(textures[KEY].texture, keys->instance[i].position.x, keys->instance[i].position.y, YELLOW);
+        }
+    }
+
+    //Draw Portals
+    for (int i = 0; i < portals->length; i++){
+        Color color = i % 2 ? (Color){128, 0, 255, 255} : GREEN;
+        Vector2 entrance = {(float)portals->instance[i].entrance.x, (float)portals->instance[i].entrance.y};
+        Vector2 exit = {(float)portals->instance[i].exit.x, (float)portals->instance[i].exit.y};
+
+        Rectangle sourceRec = {0, 0, (float)textures[PORTAL].texture.width, (float)textures[PORTAL].texture.height};
+        Rectangle destRec1 = {entrance.x+32, entrance.y+32, (float)textures[PORTAL].texture.width, (float)textures[PORTAL].texture.height};
+        Rectangle destRec2 = {exit.x+32, exit.y+32, (float)textures[PORTAL].texture.width, (float)textures[PORTAL].texture.height};
+        Vector2 origin = {(float)textures[PORTAL].texture.width / 2, (float)textures[PORTAL].texture.height / 2};
+
+        DrawTexturePro(textures[PORTAL].texture, sourceRec, destRec1, origin, (*rotation)+90*i, color);
+        DrawTexturePro(textures[PORTAL].texture, sourceRec, destRec2, origin, (*rotation)+90*(i+1), color);
+
+        (*counter)++;
+        if ((*counter) == 180){
+            if ((*rotation) == -360) (*rotation) = -90;
+            else (*rotation)-=90;
+            (*counter) = 0;
+        }
+    }
+
+    //Draw Player
+    DrawEntity(*player, GRAY, RED);
+    DrawTextureRec(textures[PLAYER].texture, player_frameRec, (Vector2){(float)player->spr.x, (float)player->spr.y}, BLUE);
+
+    //Draw crates
+    for (int i = 0; i < crates->length; i++){
+        DrawEntity(crates->instance[i], WHITE, BROWN);
+        DrawTexture(textures[CRATE].texture, crates->instance[i].spr.x, crates->instance[i].spr.y, BROWN);
+    }
 }

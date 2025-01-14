@@ -6,9 +6,10 @@
 #include <string.h>
 #include <math.h>
 #include <ctype.h>
+#include <dirent.h>
 #include <mylib.h>
 
-int main(){
+int main(void){
     int speed = 2, timer = 0;
 
     char keysUI[] = "Keys: 0";
@@ -28,91 +29,42 @@ int main(){
 
     PortalsArr portals = {NULL, 0};
 
+    void *data[END] = {
+        [EMPTY] = NULL,
+        [PLAYER] = &player,
+        [WALL] = &walls,
+        [CRATE] = &crates,
+        [PORTAL] = &portals,
+        [DOOR] = &doors,
+        [KEY] = &keys
+    };
+
     Camera2D camera = {
         .offset = (Vector2){ 800/2, 600/2},
         .zoom = 1
     };
 
+    LoadData(data, &map); //Load objects from map into their specific structs
+
     InitWindow(800, 600, "Project");
     SetTargetFPS(60);
 
-    //Load objects from map
-    for (int i = 0; i < map.rows; i++){
-        for (int j = 0; j < map.cols; j++){
-            if (isdigit(*map.array[i][j])){
-                int currentValue = atoi(map.array[i][j]);
-                switch (currentValue){
-                    case PLAYER:{
-                        player.spr.y = player.box.y = i * TILE_SIZE;
-                        player.spr.x = player.box.x = j * TILE_SIZE;
-                        break;
-                    }
-                    case WALL:{
-                        Block new_wall = {j * TILE_SIZE, i * TILE_SIZE};
-                        walls.instance = (Block*)AppendElement(walls.instance, sizeof(Block), walls.length, &new_wall);
-                        walls.length++;
-                        break;
-                    }
-                    case CRATE:{
-                        Entity new_crate = {{j * TILE_SIZE, i * TILE_SIZE}, {j * TILE_SIZE, i * TILE_SIZE}};
-                        crates.instance = (Entity*)AppendElement(crates.instance, sizeof(Entity), crates.length, &new_crate);
-                        crates.length++;
-                        break;
-                    }
-                    case DOOR:{
-                        Item new_door = {{j * TILE_SIZE, i * TILE_SIZE}, 0};
-                        doors.instance = (Item*)AppendElement(doors.instance, sizeof(Item), doors.length, &new_door);
-                        doors.length++;
-                        break;
-                    }
-                    case KEY:{
-                        Item new_key = {{j * TILE_SIZE, i * TILE_SIZE}, 0};
-                        keys.instance = (Item*)AppendElement(keys.instance, sizeof(Item), keys.length, &new_key);
-                        keys.length++;
-                        break;
-                    }
-                }
-            } else {
-                switch (map.array[i][j][0]){
-                    case 'P':
-                        int index = map.array[i][j][1] - '0';
-                        Portals new_portal = {{j * TILE_SIZE, i * TILE_SIZE}, {-1, -1}};
+    TextureData textures[8];
+    int textureCount = LoadTexturesFromFolder("./images", textures, 8);
 
-                        if (!portals.length){
-                            portals.instance = (Portals*)AppendElement(portals.instance, sizeof(Portals), portals.length, &new_portal);
-                            portals.length++;
-                            continue;
-                        }
-                        
-                        if (
-                            portals.instance[index].exit.x == -1 ||
-                            portals.instance[index].exit.y == -1
-                        ){
-                            portals.instance[index].exit.x = j * TILE_SIZE;
-                            portals.instance[index].exit.y = i * TILE_SIZE;
-                        } else {
-                            portals.instance = (Portals*)AppendElement(portals.instance, sizeof(Portals), portals.length, &new_portal);
-                            portals.length++;
-                        }
-                        break;
-                }
-            }
-        }
-    }
-
-    Texture2D keyTexture = LoadTextureFromFile("images/Key.png");
-    Texture2D wallTexture = LoadTextureFromFile("images/Wall.png");
-    Texture2D crateTexture = LoadTextureFromFile("images/Crate.png");
     Texture2D doorOpTexture = LoadTextureFromFile("images/DoorOpened.png");
     Texture2D doorLoTexture = LoadTextureFromFile("images/DoorLocked.png");
 
     //Animation data
-    Image playerSprites = LoadImage("images/PlayerSprites.png");
+    Image playerSprites = LoadImage("images/01_PlayerSprites.png");
     ImageResizeNN(&playerSprites, TILE_SIZE*2, TILE_SIZE);
     Texture2D anim = LoadTextureFromImage(playerSprites);
     UnloadImage(playerSprites);
     Rectangle frameRec = { 0.0f, 0.0f, (float)anim.width/2, (float)anim.height };
     int currentFrame = 0, framesCounter = 0;
+
+    float rotation = 0;
+    int counter = 0;
 
     while (!WindowShouldClose()){
         camera.target = (Vector2){Clamp(player.spr.x + 32.0f, 800/2, 64*map.cols-800/2), Clamp(player.spr.y + 32.0f, 600/2, 64*map.rows-600/2)};
@@ -131,42 +83,7 @@ int main(){
             frameRec.x = (float)currentFrame*(float)anim.width/2;
         }
 
-        //Draw Walls
-        for (int i = 0; i < walls.length; i++){
-            DrawTexture(wallTexture, walls.instance[i].x, walls.instance[i].y, GRAY);
-        }
-        
-        //Draw Doors
-        for (int i = 0; i < doors.length; i++){
-            if (doors.instance[i].active){
-                DrawTexture(doorOpTexture, doors.instance[i].position.x, doors.instance[i].position.y, WHITE);
-                continue;
-            }
-            DrawTexture(doorLoTexture, doors.instance[i].position.x, doors.instance[i].position.y, WHITE);
-        }
-
-        //Draw Keys
-        for (int i = 0; i < keys.length; i++){
-            if (!keys.instance[i].active){
-                DrawTexture(keyTexture, keys.instance[i].position.x, keys.instance[i].position.y, YELLOW);
-            }
-        }
-
-        //Draw Portals
-        for (int i = 0; i < portals.length; i++){
-            DrawPortal(portals.instance[i], BLUE, GREEN);
-        }
-
-        //Draw Player
-        DrawEntity(player, GRAY, RED);
-        DrawTextureRec(anim, frameRec, (Vector2){(float)player.spr.x, (float)player.spr.y}, BLUE);
-
-        //Draw crates
-        for (int i = 0; i < crates.length; i++){
-            DrawEntity(crates.instance[i], WHITE, BROWN);
-            DrawTexture(crateTexture, crates.instance[i].spr.x, crates.instance[i].spr.y, BROWN);
-        }
-
+        DrawMap(data, textures, frameRec, &rotation, &counter);
         DrawText(keysUI, camera.target.x+270, camera.target.y+250, 30, WHITE);
 
         int moveKeys[] = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_S, KEY_A, KEY_D, -1};
@@ -355,8 +272,9 @@ int main(){
         EndDrawing();
     }
 
-    UnloadTexture(wallTexture);
-    UnloadTexture(crateTexture);
+    for (int i = 0; i < textureCount; i++) {
+        UnloadTexture(textures[i].texture);
+    }
     UnloadTexture(doorOpTexture);
     UnloadTexture(doorLoTexture);
     UnloadTexture(anim);
@@ -367,5 +285,4 @@ int main(){
     free(keys.instance);
     free(portals.instance);
     CloseWindow();
-    return 0;
 }
