@@ -12,6 +12,18 @@ typedef struct PortalsArr {Portals *instance; int length;} PortalsArr;
 typedef struct ItemArr {Item *instance; int length;} ItemArr;
 typedef struct TextureData {Texture2D texture; char filename[256];} TextureData;
 
+typedef struct Animation {
+    Texture2D *texture;   //Sprite sheet
+    int startingRow;      //Texture row from where each frame will be displayed
+    int frameWidth;
+    int frameHeight;
+    int frameCount;       // Total number of frames
+    int currentFrame;
+    float frameDuration;  // Duration of each frame in seconds
+    float frameTimer;
+    float rotation;
+} Animation;
+
 typedef enum Dictionary {
     EMPTY,
     PLAYER,
@@ -30,6 +42,20 @@ typedef enum Direction {
     RIGHT,
     LEFT
 } Direction;
+
+Animation InitAnimValues(Texture2D *texture, int starting_row, float duration, int totalFrames){
+    Animation anim = {
+        .texture = texture,
+        .startingRow = starting_row,
+        .frameWidth = TILE_SIZE,
+        .frameHeight = TILE_SIZE,
+        .frameCount = totalFrames,
+        .currentFrame = 0,
+        .frameDuration = duration,
+        .frameTimer = 0.0f
+    };
+    return anim;
+};
 
 //Prints an error and terminates the program
 void Error(const char *message){
@@ -62,8 +88,8 @@ int IsInsideMap(Block block, CSV map){
 }
 
 //Checks if any of the passed keys are pressed
-int IsAnyOfKeysPressed(int *keys) {
-    for (int i = 0; keys[i] != -1; i++) {
+int IsAnyOfKeysPressed(int *keys){
+    for (int i = 0; keys[i] != -1; i++){
         if (IsKeyDown(keys[i])) return keys[i];
     }
     return 0;
@@ -221,13 +247,13 @@ void LoadLinkedObject(void *data[], const char *object_type, int y, int x){
             int index = object_type[1] - '0';
             Portals new_portal = {{x * TILE_SIZE, y * TILE_SIZE}, {-1, -1}};
 
-            if (!portals->length) {
+            if (!portals->length){
                 portals->instance = (Portals*)AppendElement(portals->instance, sizeof(Portals), portals->length, &new_portal);
                 portals->length++;
                 return;
             }
 
-            if (portals->instance[index].exit.x == -1 || portals->instance[index].exit.y == -1) {
+            if (portals->instance[index].exit.x == -1 || portals->instance[index].exit.y == -1){
                 portals->instance[index].exit.x = x * TILE_SIZE;
                 portals->instance[index].exit.y = y * TILE_SIZE;
             } else {
@@ -252,7 +278,7 @@ void LoadData(void *data[], CSV *map){
 }
 
 //Loads all images from a folder into an array of textures
-int LoadTexturesFromFolder(const char *folder_path, TextureData *textures, int max_textures) {
+int LoadTexturesFromFolder(const char *folder_path, TextureData *textures, int max_textures){
     int texture_count = 0;
 
     // Open directory
@@ -278,8 +304,49 @@ int LoadTexturesFromFolder(const char *folder_path, TextureData *textures, int m
     return texture_count;
 }
 
+//Function that updates frame data from an animation and draws it into the specified coordinates
+void Animate(Animation* anim, int posX, int posY, Color color){
+    //Update animation
+    anim->frameTimer += deltaTime;
+    if (anim->frameTimer >= anim->frameDuration){
+        anim->frameTimer = 0.0f;
+        anim->currentFrame++;
+        if (anim->currentFrame >= anim->frameCount){
+            anim->currentFrame = 0;
+        }
+    }
+
+    //Draw animation
+    int frameX = (anim->currentFrame % (anim->texture->width / anim->frameWidth)) * anim->frameWidth;
+    int frameY = ((anim->currentFrame / (anim->texture->width / anim->frameWidth)) * anim->frameHeight)+anim->startingRow;
+
+    Rectangle sourceRect = { (float)frameX, (float)frameY, (float)anim->frameWidth, (float)anim->frameHeight };
+    Rectangle destRect = { (float)posX, (float)posY, (float)anim->frameWidth, (float)anim->frameHeight};
+    DrawTexturePro(*anim->texture, sourceRect, destRect, (Vector2){0, 0}, anim->rotation, color);
+}
+
+//Function that updates frame data from an animation and draws it into the specified coordinates
+void Rotate(Animation* anim, int posX, int posY, Color color, float degrees, int increment){
+    //Update animation
+    anim->frameTimer += deltaTime;
+    if (anim->frameTimer >= anim->frameDuration){
+        anim->frameTimer = 0.0f;
+        int direction = pow(degrees, 0);
+        if (anim->rotation == 360*direction) anim->rotation = degrees;
+        else anim->rotation += degrees*direction;
+    }
+
+    //Draw animation
+    int frameX = (anim->currentFrame % (anim->texture->width / anim->frameWidth)) * anim->frameWidth;
+    int frameY = ((anim->currentFrame / (anim->texture->width / anim->frameWidth)) * anim->frameHeight)+anim->startingRow;
+
+    Rectangle sourceRect = { (float)frameX, (float)frameY, (float)anim->frameWidth, (float)anim->frameHeight };
+    Rectangle destRect = { (float)posX+32, (float)posY+32, (float)anim->frameWidth, (float)anim->frameHeight};
+    DrawTexturePro(*anim->texture, sourceRect, destRect, (Vector2){32, 32}, anim->rotation+increment, color);
+}
+
 //Draws every element from the loaded map
-void DrawMap(void *data[], TextureData textures[], Rectangle player_frameRec, float *rotation, int *counter){
+void DrawMap(void *data[], TextureData textures[], Animation *anim_player, Animation *anim_portal){
     Entity *player = (Entity *)data[PLAYER];
     BlockArr *walls = (BlockArr *)data[WALL];
     ItemArr *doors = (ItemArr *)data[DOOR];
@@ -313,25 +380,13 @@ void DrawMap(void *data[], TextureData textures[], Rectangle player_frameRec, fl
         Vector2 entrance = {(float)portals->instance[i].entrance.x, (float)portals->instance[i].entrance.y};
         Vector2 exit = {(float)portals->instance[i].exit.x, (float)portals->instance[i].exit.y};
 
-        Rectangle sourceRec = {0, 0, (float)textures[PORTAL].texture.width, (float)textures[PORTAL].texture.height};
-        Rectangle destRec1 = {entrance.x+32, entrance.y+32, (float)textures[PORTAL].texture.width, (float)textures[PORTAL].texture.height};
-        Rectangle destRec2 = {exit.x+32, exit.y+32, (float)textures[PORTAL].texture.width, (float)textures[PORTAL].texture.height};
-        Vector2 origin = {(float)textures[PORTAL].texture.width / 2, (float)textures[PORTAL].texture.height / 2};
-
-        DrawTexturePro(textures[PORTAL].texture, sourceRec, destRec1, origin, (*rotation)+90*i, color);
-        DrawTexturePro(textures[PORTAL].texture, sourceRec, destRec2, origin, (*rotation)+90*(i+1), color);
-
-        (*counter)++;
-        if ((*counter) == 180){
-            if ((*rotation) == -360) (*rotation) = -90;
-            else (*rotation)-=90;
-            (*counter) = 0;
-        }
+        Rotate(anim_portal, entrance.x, entrance.y, color, -90, 90*i);
+        Rotate(anim_portal, exit.x, exit.y, color, -90, 90*(i+1));
     }
 
     //Draw Player
     DrawEntity(*player, GRAY, RED);
-    DrawTextureRec(textures[PLAYER].texture, player_frameRec, (Vector2){(float)player->spr.x, (float)player->spr.y}, BLUE);
+    Animate(anim_player, player->spr.x, player->spr.y, BLUE);
 
     //Draw crates
     for (int i = 0; i < crates->length; i++){

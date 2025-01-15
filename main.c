@@ -1,4 +1,5 @@
 #define TILE_SIZE 64
+float deltaTime;
 
 #include <raylib.h>
 #include <stdio.h>
@@ -52,38 +53,20 @@ int main(void){
     TextureData textures[8];
     int textureCount = LoadTexturesFromFolder("./images", textures, 8);
 
-    Texture2D doorOpTexture = LoadTextureFromFile("images/DoorOpened.png");
-    Texture2D doorLoTexture = LoadTextureFromFile("images/DoorLocked.png");
-
-    //Animation data
-    Image playerSprites = LoadImage("images/01_PlayerSprites.png");
-    ImageResizeNN(&playerSprites, TILE_SIZE*2, TILE_SIZE);
-    Texture2D anim = LoadTextureFromImage(playerSprites);
-    UnloadImage(playerSprites);
-    Rectangle frameRec = { 0.0f, 0.0f, (float)anim.width/2, (float)anim.height };
-    int currentFrame = 0, framesCounter = 0;
-
-    float rotation = 0;
-    int counter = 0;
+    Animation animPlayer = InitAnimValues(&textures[PLAYER].texture, 0, 0.5f, 2);
+    Animation animPortal = InitAnimValues(&textures[PORTAL].texture, 0, 5.0f, 1);
 
     while (!WindowShouldClose()){
+        deltaTime = GetFrameTime();
         camera.target = (Vector2){Clamp(player.spr.x + 32.0f, 800/2, 64*map.cols-800/2), Clamp(player.spr.y + 32.0f, 600/2, 64*map.rows-600/2)};
+        animPlayer.frameDuration = 0.5f/(speed == 2 ? 1 : 3);
 
         //Start rendering
         BeginDrawing();
         ClearBackground(BLACK);
         BeginMode2D(camera);
 
-        //Basic Animation
-        framesCounter++;
-        if (framesCounter >= (60/speed)){
-            framesCounter = 0;
-            currentFrame++;
-            if (currentFrame > 1) currentFrame = 0;
-            frameRec.x = (float)currentFrame*(float)anim.width/2;
-        }
-
-        DrawMap(data, textures, frameRec, &rotation, &counter);
+        DrawMap(data, textures, &animPlayer, &animPortal);
         DrawText(keysUI, camera.target.x+270, camera.target.y+250, 30, WHITE);
 
         int moveKeys[] = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_S, KEY_A, KEY_D, -1};
@@ -275,9 +258,6 @@ int main(void){
     for (int i = 0; i < textureCount; i++) {
         UnloadTexture(textures[i].texture);
     }
-    UnloadTexture(doorOpTexture);
-    UnloadTexture(doorLoTexture);
-    UnloadTexture(anim);
     FreeCSV(&map);
     free(walls.instance);
     free(crates.instance);
