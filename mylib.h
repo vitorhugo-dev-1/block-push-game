@@ -174,12 +174,6 @@ Texture2D LoadTextureFromFile(const char *file_name){
     return texture;
 }
 
-//Draws an entity's box and its sprite
-void DrawEntity(Entity entity, Color color1, Color color2){
-    DrawRectangle(entity.box.x, entity.box.y, TILE_SIZE, TILE_SIZE, color1);
-    DrawRectangle(entity.spr.x, entity.spr.y, TILE_SIZE, TILE_SIZE, color2);
-}
-
 //Append element to the end of array
 void* AppendElement(void* array, int byte_size, int length, void* new_element){
     void* new_array = realloc(array, (length + 1) * byte_size);
@@ -385,12 +379,43 @@ void DrawMap(void *data[], TextureData textures[], Animation *anim_player, Anima
     }
 
     //Draw Player
-    DrawEntity(*player, GRAY, RED);
+    DrawRectangle(player->box.x, player->box.y, TILE_SIZE, TILE_SIZE, GRAY);
     Animate(anim_player, player->spr.x, player->spr.y, BLUE);
 
     //Draw crates
     for (int i = 0; i < crates->length; i++){
-        DrawEntity(crates->instance[i], WHITE, BROWN);
+        DrawRectangle(crates->instance[i].box.x, crates->instance[i].box.y, TILE_SIZE, TILE_SIZE, WHITE);
         DrawTexture(textures[CRATE].texture, crates->instance[i].spr.x, crates->instance[i].spr.y, BROWN);
+    }
+}
+
+void CollidePortals(Entity *entity, PortalsArr *portals, Direction goToDir, int *timer, bool isObj, CSV *map){
+    for (int i = 0; i < portals->length; i++){
+        Portals current = portals->instance[i];
+        if (
+            entity->box.y == entity->spr.y &&
+            entity->box.x == entity->spr.x &&
+            (
+                (entity->box.y == current.entrance.y && entity->box.x == current.entrance.x) ||
+                (entity->box.y == current.exit.y && entity->box.x == current.exit.x)
+            )
+        ){
+            int portalY = (entity->box.y == current.entrance.y) ? current.exit.y : current.entrance.y;
+            int portalX = (entity->box.x == current.entrance.x) ? current.exit.x : current.entrance.x;
+
+            int oldY = entity->box.y/TILE_SIZE;
+            int oldX = entity->box.x/TILE_SIZE;
+
+            entity->spr.y = portalY;
+            entity->spr.x = portalX;
+            entity->box.y = portalY + (((goToDir == UP) * -1) + (goToDir == DOWN)) * TILE_SIZE;
+            entity->box.x = portalX + (((goToDir == LEFT) * -1) + (goToDir == RIGHT)) * TILE_SIZE;
+            *timer = TILE_SIZE;
+
+            if (isObj){
+                strcpy(map->array[oldY][oldX], "00");
+                strcpy(map->array[entity->box.y/TILE_SIZE][entity->box.x/TILE_SIZE], "03");
+            }
+        }
     }
 }

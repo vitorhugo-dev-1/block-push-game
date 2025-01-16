@@ -178,64 +178,43 @@ int main(void){
 
         //Smooth movement animation
         speed = 2 * (IsKeyDown(KEY_LEFT_SHIFT) + 1);
-        if (player.spr.y != player.box.y || player.spr.x != player.box.x){
-            if (timer > 0){
-                //Animate crate
-                for (int i = 0; i < crates.length; i++){
-                    if (
-                        crates.instance[i].box.x != crates.instance[i].spr.x ||
-                        crates.instance[i].box.y != crates.instance[i].spr.y
-                    ){
-                        crates.instance[i].spr.y += IsHigherOrLower(crates.instance[i].box.y, crates.instance[i].spr.y) * speed;
-                        crates.instance[i].spr.x += IsHigherOrLower(crates.instance[i].box.x, crates.instance[i].spr.x) * speed;
-                    }
+        if (timer > 0){
+            //Animate crate
+            for (int i = 0; i < crates.length; i++){
+                if (crates.instance[i].box.x != crates.instance[i].spr.x){
+                    crates.instance[i].spr.x += IsHigherOrLower(crates.instance[i].box.x, crates.instance[i].spr.x) * speed;
+                } else if (crates.instance[i].box.y != crates.instance[i].spr.y){
+                    crates.instance[i].spr.y += IsHigherOrLower(crates.instance[i].box.y, crates.instance[i].spr.y) * speed;
                 }
-
-                //Animate player
-                if (player.spr.y != player.box.y){
-                    player.spr.y += IsHigherOrLower(player.box.y, player.spr.y) * speed;
-                } else if (player.spr.x != player.box.x){
-                    player.spr.x += IsHigherOrLower(player.box.x, player.spr.x) * speed;
-                }
-                timer -= speed;
-            } else {
-                player.spr.y = player.box.y;
-                player.spr.x = player.box.x;
-
-                for (int i = 0; i < crates.length; i++){
-                    if (
-                        crates.instance[i].box.x != crates.instance[i].spr.x ||
-                        crates.instance[i].box.y != crates.instance[i].spr.y
-                    ){
-                        crates.instance[i].box.x = crates.instance[i].spr.x;
-                        crates.instance[i].box.y = crates.instance[i].spr.y;
-                    }
-                }
-
-                timer = 0;
             }
+
+            //Animate player
+            if (player.spr.y != player.box.y){
+                player.spr.y += IsHigherOrLower(player.box.y, player.spr.y) * speed;
+            } else if (player.spr.x != player.box.x){
+                player.spr.x += IsHigherOrLower(player.box.x, player.spr.x) * speed;
+            }
+            timer -= speed;
+        } else {
+            player.spr.y = player.box.y;
+            player.spr.x = player.box.x;
+
+            for (int i = 0; i < crates.length; i++){
+                if (
+                    crates.instance[i].box.x != crates.instance[i].spr.x ||
+                    crates.instance[i].box.y != crates.instance[i].spr.y
+                ){
+                    crates.instance[i].box.x = crates.instance[i].spr.x;
+                    crates.instance[i].box.y = crates.instance[i].spr.y;
+                }
+            }
+            timer = 0;
         }
 
         // Collide with portals
-        for (int i = 0; i < portals.length; i++){
-            Portals current = portals.instance[i];
-            if (
-                player.box.y == player.spr.y &&
-                player.box.x == player.spr.x &&
-                (
-                    (player.box.y == current.entrance.y && player.box.x == current.entrance.x) ||
-                    (player.box.y == current.exit.y && player.box.x == current.exit.x)
-                )
-            ){
-                int portalY = (player.box.y == current.entrance.y) ? current.exit.y : current.entrance.y;
-                int portalX = (player.box.x == current.entrance.x) ? current.exit.x : current.entrance.x;
-
-                player.spr.y = portalY;
-                player.spr.x = portalX;
-                player.box.y = portalY + (((goToDir == UP) * -1) + (goToDir == DOWN)) * TILE_SIZE;
-                player.box.x = portalX + (((goToDir == LEFT) * -1) + (goToDir == RIGHT)) * TILE_SIZE;
-                timer = TILE_SIZE;
-            }
+        CollidePortals(&player, &portals, goToDir, &timer, false, &map);
+        for (int i = 0; i < crates.length; i++){
+            CollidePortals(&crates.instance[i], &portals, goToDir, &timer, true, &map);
         }
 
         //Collect key
