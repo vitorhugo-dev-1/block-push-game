@@ -1,3 +1,7 @@
+#pragma once
+
+#define TILE_SIZE 64
+
 //Structs for singular objects definition
 typedef struct Block {int x, y;} Block;
 typedef struct Entity {Block box, spr;} Entity;
@@ -184,13 +188,6 @@ void* AppendElement(void* array, int byte_size, int length, void* new_element){
     return new_array;
 }
 
-//Clamp function to restrict a value within a specified range
-float Clamp(float value, float min, float max){
-    if (value < min) return min;
-    if (value > max) return max;
-    return value;
-}
-
 //Loads into an array a map object that's not directly linked to any other object in the same map
 void LoadSingularObject(void *data[], const char *object_type, int y, int x){
     Entity *player = (Entity *)data[PLAYER];
@@ -272,30 +269,16 @@ void LoadData(void *data[], CSV *map){
 }
 
 //Loads all images from a folder into an array of textures
-int LoadTexturesFromFolder(const char *folder_path, TextureData *textures, int max_textures){
-    int texture_count = 0;
+void LoadTexturesFromFolder(const char *folder_path, TextureData *textures){
+    FilePathList files = LoadDirectoryFiles(folder_path);
+    if (!files.count) Error("Could not open texture directory.\n");
 
-    // Open directory
-    DIR *dir = opendir(folder_path);
-    if (dir == NULL) Error("Could not open texture directory.\n");
-
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL && texture_count < max_textures){
-        // Skip current and parent directory entries
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
-
-        // Construct full file path
-        char file_path[512];
-        snprintf(file_path, sizeof(file_path), "%s/%s", folder_path, entry->d_name);
-
-        // Load texture
-        textures[texture_count].texture = LoadTextureFromFile(file_path);
-        strncpy(textures[texture_count].filename, entry->d_name, sizeof(textures[texture_count].filename) - 1);
-        texture_count++;
+    for (unsigned int i = 0; i < files.count; i++){
+        textures[i].texture = LoadTextureFromFile(files.paths[i]);
+        strncpy(textures[i].filename, files.paths[i], sizeof(textures[i].filename) - 1);
     }
-    closedir(dir);
 
-    return texture_count;
+    UnloadDirectoryFiles(files);
 }
 
 //Function that updates frame data from an animation and draws it into the specified coordinates

@@ -1,13 +1,12 @@
-#define TILE_SIZE 64
 float deltaTime;
 
 #include <raylib.h>
+#include <raymath.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <ctype.h>
-#include <dirent.h>
 #include <mylib.h>
 
 int main(void){
@@ -50,8 +49,8 @@ int main(void){
     InitWindow(800, 600, "Project");
     SetTargetFPS(60);
 
-    TextureData textures[8];
-    int textureCount = LoadTexturesFromFolder("./images", textures, 8);
+    TextureData textures[END];
+    LoadTexturesFromFolder("./images", textures);
 
     Animation animPlayer = InitAnimValues(&textures[PLAYER].texture, 0, 0.5f, 2);
     Animation animPortal = InitAnimValues(&textures[PORTAL].texture, 0, 5.0f, 1);
@@ -234,7 +233,7 @@ int main(void){
         EndDrawing();
     }
 
-    for (int i = 0; i < textureCount; i++) {
+    for (int i = 0; i < END; i++) {
         UnloadTexture(textures[i].texture);
     }
     FreeCSV(&map);
