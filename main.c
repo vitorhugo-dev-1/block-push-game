@@ -114,10 +114,7 @@ int main(void){
 
                     case CRATE:
                         for (int i = 0; i < crates.length; i++){
-                            if (
-                                crates.instance[i].box.x == player.box.x &&
-                                crates.instance[i].box.y == player.box.y
-                            ){
+                            if (CheckCollisionBlocks(crates.instance[i].box, player.box)){
                                 if (
                                     player.box.y != player.spr.y ||
                                     player.box.x != player.spr.x
@@ -158,8 +155,7 @@ int main(void){
         //Collision testing door
         for (int i = 0; i < doors.length; i++){
             if (
-                player.box.y == doors.instance[i].position.y &&
-                player.box.x == doors.instance[i].position.x &&
+                CheckCollisionBlocks(player.box, doors.instance[i].position) &&
                 !doors.instance[i].active
             ){
                 if (counterKeys){
@@ -211,16 +207,15 @@ int main(void){
         }
 
         // Collide with portals
-        CollidePortals(&player, &portals, goToDir, &timer, false, &map);
+        CheckCollisionPortals(&player, &portals, goToDir, &timer, false, &map);
         for (int i = 0; i < crates.length; i++){
-            CollidePortals(&crates.instance[i], &portals, goToDir, &timer, true, &map);
+            CheckCollisionPortals(&crates.instance[i], &portals, goToDir, &timer, true, &map);
         }
 
         //Collect key
         for (int i = 0; i < keys.length; i++){
             if (
-                player.spr.y == keys.instance[i].position.y &&
-                player.spr.x == keys.instance[i].position.x &&
+                CheckCollisionBlocks(player.spr, keys.instance[i].position) &&
                 !keys.instance[i].active
             ){
                 keys.instance[i].active = true;

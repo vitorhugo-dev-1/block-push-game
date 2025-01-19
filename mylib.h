@@ -353,7 +353,7 @@ void DrawMap(void *data[], TextureData textures[], Animation *anim_player, Anima
 
     //Draw Portals
     for (int i = 0; i < portals->length; i++){
-        Color color = i % 2 ? (Color){128, 0, 255, 255} : GREEN;
+        Color color = i&1 ? (Color){128, 0, 255, 255} : GREEN;
         Vector2 entrance = {(float)portals->instance[i].entrance.x, (float)portals->instance[i].entrance.y};
         Vector2 exit = {(float)portals->instance[i].exit.x, (float)portals->instance[i].exit.y};
 
@@ -372,15 +372,20 @@ void DrawMap(void *data[], TextureData textures[], Animation *anim_player, Anima
     }
 }
 
-void CollidePortals(Entity *entity, PortalsArr *portals, Direction goToDir, int *timer, bool isObj, CSV *map){
+// Returns true if block1's coordinates are equal to block2's
+bool CheckCollisionBlocks(Block block1, Block block2){
+    return (block1.x == block2.x && block1.y == block2.y ? true : false);
+}
+
+// Returns true if block1's coordinates are equal to block2's
+void CheckCollisionPortals(Entity *entity, PortalsArr *portals, Direction goToDir, int *timer, bool isObj, CSV *map){
     for (int i = 0; i < portals->length; i++){
         Portals current = portals->instance[i];
         if (
-            entity->box.y == entity->spr.y &&
-            entity->box.x == entity->spr.x &&
+            CheckCollisionBlocks(entity->box, entity->spr) &&
             (
-                (entity->box.y == current.entrance.y && entity->box.x == current.entrance.x) ||
-                (entity->box.y == current.exit.y && entity->box.x == current.exit.x)
+                CheckCollisionBlocks(entity->box, current.entrance) ||
+                CheckCollisionBlocks(entity->box, current.exit)
             )
         ){
             int portalY = (entity->box.y == current.entrance.y) ? current.exit.y : current.entrance.y;
