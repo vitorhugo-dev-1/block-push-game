@@ -12,39 +12,37 @@ float deltaTime;
 int main(void){
     int speed = 2, timer = 0;
 
+    //Map object variables
+    void *data[END];
+    int structSize[END] = {NULL, sizeof(Entity), sizeof(Block), sizeof(Entity), sizeof(Portals), sizeof(Item), sizeof(Item)};
+    int dataLength[END];
+    memset(dataLength, 0, sizeof(dataLength));
+
+    //UI variables
     char keysUI[] = "Keys: 0";
     int counterKeys = 0;
 
     Direction goToDir = NOWHERE;
+    Camera2D camera = {.offset = (Vector2){ 800/2, 600/2}, .zoom = 1};
 
-    CSV map = {NULL, 1, 1};
-    LoadCSV("map.csv", &map, 2);
+    int cellSize = 2;
+    CSV map;
+    calcSizesCSV("map.csv", &map, cellSize, dataLength);
 
-    Entity player;
+    MemoryArena arena;
+    size_t size = ArenaCalcMapMemorySize(map, cellSize, dataLength, structSize);
 
-    BlockArr walls = {NULL, 0};
-    EntityArr crates = {NULL, 0};
-    ItemArr doors = {NULL, 0};
-    ItemArr keys = {NULL, 0};
+    ArenaMalloc(&arena, size);
+    GenerateArrayFromCSV("map.csv", &map, 2, &arena);
+    ArenaReserveMemoryObjects(&arena, data, dataLength, structSize);
+    PopulateData(data, &map, dataLength);
 
-    PortalsArr portals = {NULL, 0};
-
-    void *data[END] = {
-        [EMPTY] = NULL,
-        [PLAYER] = &player,
-        [WALL] = &walls,
-        [CRATE] = &crates,
-        [PORTAL] = &portals,
-        [DOOR] = &doors,
-        [KEY] = &keys
-    };
-
-    Camera2D camera = {
-        .offset = (Vector2){ 800/2, 600/2},
-        .zoom = 1
-    };
-
-    LoadData(data, &map); //Load objects from map into their specific structs
+    Entity *players = (Entity *)data[PLAYER];
+    //Block *walls = (Block *)data[WALL];
+    Entity *crates = (Entity *)data[CRATE];
+    Item *doors = (Item *)data[DOOR];
+    Item *keys = (Item *)data[KEY];
+    Portals *portals = (Portals *)data[PORTAL];
 
     InitWindow(800, 600, "Project");
     SetTargetFPS(60);
@@ -57,7 +55,7 @@ int main(void){
 
     while (!WindowShouldClose()){
         deltaTime = GetFrameTime();
-        camera.target = (Vector2){Clamp(player.spr.x + 32.0f, 800/2, 64*map.cols-800/2), Clamp(player.spr.y + 32.0f, 600/2, 64*map.rows-600/2)};
+        camera.target = (Vector2){Clamp(players[0].spr.x + 32.0f, 800/2, 64*map.cols-800/2), Clamp(players[0].spr.y + 32.0f, 600/2, 64*map.rows-600/2)};
         animPlayer.frameDuration = 0.5f/(speed == 2 ? 1 : 3);
 
         //Start rendering
@@ -65,7 +63,7 @@ int main(void){
         ClearBackground(BLACK);
         BeginMode2D(camera);
 
-        DrawMap(data, textures, &animPlayer, &animPortal);
+        DrawMap(data, dataLength, textures, &animPlayer, &animPortal);
         DrawText(keysUI, camera.target.x+270, camera.target.y+250, 30, WHITE);
 
         int moveKeys[] = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_S, KEY_A, KEY_D, -1};
@@ -94,37 +92,37 @@ int main(void){
                     break;
             }
 
-            player.box.y += (((goToDir == UP)*-1) + (goToDir == DOWN)) * TILE_SIZE;
-            player.box.x += (((goToDir == LEFT)*-1) + (goToDir == RIGHT)) * TILE_SIZE;
+            players[0].box.y += (((goToDir == UP)*-1) + (goToDir == DOWN)) * TILE_SIZE;
+            players[0].box.x += (((goToDir == LEFT)*-1) + (goToDir == RIGHT)) * TILE_SIZE;
             timer = TILE_SIZE;
         }
 
         //Collision testing
-        int gridX = player.box.x / TILE_SIZE;
-        int gridY = player.box.y / TILE_SIZE;
+        int gridX = players[0].box.x / TILE_SIZE;
+        int gridY = players[0].box.y / TILE_SIZE;
 
         if (IsInsideMap((Block){gridX, gridY}, map)){
             if (isdigit(*map.array[gridY][gridX])){
                 switch (atoi(map.array[gridY][gridX])){
                     case WALL:
-                        player.box.x = player.spr.x;
-                        player.box.y = player.spr.y;
+                        players[0].box.x = players[0].spr.x;
+                        players[0].box.y = players[0].spr.y;
                         timer = 0;
                         break;
 
                     case CRATE:
-                        for (int i = 0; i < crates.length; i++){
-                            if (CheckCollisionBlocks(crates.instance[i].box, player.box)){
+                        for (int i = 0; i < dataLength[CRATE]; i++){
+                            if (CheckCollisionBlocks(crates[i].box, players[0].box)){
                                 if (
-                                    player.box.y != player.spr.y ||
-                                    player.box.x != player.spr.x
+                                    players[0].box.y != players[0].spr.y ||
+                                    players[0].box.x != players[0].spr.x
                                 ){
-                                    crates.instance[i].box.y += IsHigherOrLower(player.box.y, player.spr.y) * TILE_SIZE;
-                                    crates.instance[i].box.x += IsHigherOrLower(player.box.x, player.spr.x) * TILE_SIZE;
+                                    crates[i].box.y += IsHigherOrLower(players[0].box.y, players[0].spr.y) * TILE_SIZE;
+                                    crates[i].box.x += IsHigherOrLower(players[0].box.x, players[0].spr.x) * TILE_SIZE;
                                 }
 
-                                int crateY = crates.instance[i].box.y / TILE_SIZE;
-                                int crateX = crates.instance[i].box.x / TILE_SIZE;
+                                int crateY = crates[i].box.y / TILE_SIZE;
+                                int crateX = crates[i].box.x / TILE_SIZE;
 
                                 if (
                                     !IsInsideMap((Block){crateX, crateY}, map) ||
@@ -132,10 +130,10 @@ int main(void){
                                     atoi(map.array[crateY][crateX]) == CRATE ||
                                     atoi(map.array[crateY][crateX]) == DOOR
                                 ){
-                                    player.box.x = player.spr.x;
-                                    player.box.y = player.spr.y;
-                                    crates.instance[i].box.x = crates.instance[i].spr.x;
-                                    crates.instance[i].box.y = crates.instance[i].spr.y;
+                                    players[0].box.x = players[0].spr.x;
+                                    players[0].box.y = players[0].spr.y;
+                                    crates[i].box.x = crates[i].spr.x;
+                                    crates[i].box.y = crates[i].spr.y;
                                     timer = 0;
                                 } else {
                                     strcpy(map.array[gridY][gridX], "01");
@@ -147,26 +145,26 @@ int main(void){
                 }
             }
         } else {
-            player.box.x = player.spr.x;
-            player.box.y = player.spr.y;
+            players[0].box.x = players[0].spr.x;
+            players[0].box.y = players[0].spr.y;
             timer = 0;
         }
 
         //Collision testing door
-        for (int i = 0; i < doors.length; i++){
+        for (int i = 0; i < dataLength[DOOR]; i++){
             if (
-                CheckCollisionBlocks(player.box, doors.instance[i].position) &&
-                !doors.instance[i].active
+                CheckCollisionBlocks(players[0].box, doors[i].position) &&
+                !doors[i].active
             ){
                 if (counterKeys){
-                    doors.instance[i].active = true;
+                    doors[i].active = true;
                     counterKeys--;
                     sprintf(keysUI, "Keys: %d", counterKeys);
                     break;
                 }
 
-                player.box.x = player.spr.x;
-                player.box.y = player.spr.y;
+                players[0].box.x = players[0].spr.x;
+                players[0].box.y = players[0].spr.y;
                 timer = 0;
             }
         }
@@ -175,50 +173,50 @@ int main(void){
         speed = 2 * (IsKeyDown(KEY_LEFT_SHIFT) + 1);
         if (timer > 0){
             //Animate crate
-            for (int i = 0; i < crates.length; i++){
-                if (crates.instance[i].box.x != crates.instance[i].spr.x){
-                    crates.instance[i].spr.x += IsHigherOrLower(crates.instance[i].box.x, crates.instance[i].spr.x) * speed;
-                } else if (crates.instance[i].box.y != crates.instance[i].spr.y){
-                    crates.instance[i].spr.y += IsHigherOrLower(crates.instance[i].box.y, crates.instance[i].spr.y) * speed;
+            for (int i = 0; i < dataLength[CRATE]; i++){
+                if (crates[i].box.x != crates[i].spr.x){
+                    crates[i].spr.x += IsHigherOrLower(crates[i].box.x, crates[i].spr.x) * speed;
+                } else if (crates[i].box.y != crates[i].spr.y){
+                    crates[i].spr.y += IsHigherOrLower(crates[i].box.y, crates[i].spr.y) * speed;
                 }
             }
 
             //Animate player
-            if (player.spr.y != player.box.y){
-                player.spr.y += IsHigherOrLower(player.box.y, player.spr.y) * speed;
-            } else if (player.spr.x != player.box.x){
-                player.spr.x += IsHigherOrLower(player.box.x, player.spr.x) * speed;
+            if (players[0].spr.y != players[0].box.y){
+                players[0].spr.y += IsHigherOrLower(players[0].box.y, players[0].spr.y) * speed;
+            } else if (players[0].spr.x != players[0].box.x){
+                players[0].spr.x += IsHigherOrLower(players[0].box.x, players[0].spr.x) * speed;
             }
             timer -= speed;
         } else {
-            player.spr.y = player.box.y;
-            player.spr.x = player.box.x;
+            players[0].spr.y = players[0].box.y;
+            players[0].spr.x = players[0].box.x;
 
-            for (int i = 0; i < crates.length; i++){
+            for (int i = 0; i < dataLength[CRATE]; i++){
                 if (
-                    crates.instance[i].box.x != crates.instance[i].spr.x ||
-                    crates.instance[i].box.y != crates.instance[i].spr.y
+                    crates[i].box.x != crates[i].spr.x ||
+                    crates[i].box.y != crates[i].spr.y
                 ){
-                    crates.instance[i].box.x = crates.instance[i].spr.x;
-                    crates.instance[i].box.y = crates.instance[i].spr.y;
+                    crates[i].box.x = crates[i].spr.x;
+                    crates[i].box.y = crates[i].spr.y;
                 }
             }
             timer = 0;
         }
 
         // Collide with portals
-        CheckCollisionPortals(&player, &portals, goToDir, &timer, false, &map);
-        for (int i = 0; i < crates.length; i++){
-            CheckCollisionPortals(&crates.instance[i], &portals, goToDir, &timer, true, &map);
+        CheckCollisionPortals(&players[0], portals, goToDir, ((dataLength[PORTAL]/2)-(dataLength[PORTAL] % 2)), &timer, false, &map);
+        for (int i = 0; i < dataLength[CRATE]; i++){
+            CheckCollisionPortals(&crates[i], portals, goToDir, ((dataLength[PORTAL]/2)-(dataLength[PORTAL] % 2)), &timer, true, &map);
         }
 
         //Collect key
-        for (int i = 0; i < keys.length; i++){
+        for (int i = 0; i < dataLength[KEY]; i++){
             if (
-                CheckCollisionBlocks(player.spr, keys.instance[i].position) &&
-                !keys.instance[i].active
+                CheckCollisionBlocks(players[0].spr, keys[i].position) &&
+                !keys[i].active
             ){
-                keys.instance[i].active = true;
+                keys[i].active = true;
                 counterKeys++;
                 sprintf(keysUI, "Keys: %d", counterKeys);
             }
@@ -228,14 +226,10 @@ int main(void){
         EndDrawing();
     }
 
+    //Frees the allocated memory and ends the program
     for (int i = 0; i < END; i++) {
         UnloadTexture(textures[i].texture);
     }
-    FreeCSV(&map);
-    free(walls.instance);
-    free(crates.instance);
-    free(doors.instance);
-    free(keys.instance);
-    free(portals.instance);
+    ArenaFree(&arena);
     CloseWindow();
 }
