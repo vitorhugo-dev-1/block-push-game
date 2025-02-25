@@ -6,6 +6,7 @@
 	],
 	"settings": {
 		"files.associations": {
+			"*.embeddedhtml": "html",
 			"raylib.h": "c",
 			"math.h": "c",
 			"blocks.h": "c",
@@ -50,7 +51,17 @@
 			"stdexcept": "cpp",
 			"streambuf": "cpp",
 			"cinttypes": "cpp",
-			"typeinfo": "cpp"
+			"typeinfo": "cpp",
+			"string.h": "c",
+			"mainlibs.h": "c",
+			"defndec.h": "c",
+			"input.h": "c",
+			"marena.h": "c",
+			"ctype.h": "c",
+			"util.h": "c",
+			"render.h": "c",
+			"collisions.h": "c",
+			"raymath.h": "c"
 		}
 	}
 }
