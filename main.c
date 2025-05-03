@@ -49,95 +49,98 @@ int main(void){
     Animation animPlayer = InitAnimValues(&textures[PLAYER].texture, 0, 0.5f, 2);
     Animation animPortal = InitAnimValues(&textures[PORTAL].texture, 0, 5.0f, 1);
 
-    Item projectiles[3];
+    DirItem projectiles[3];
     for (int i = 0; i < 2; i++){
-        projectiles[i].active = false;
+        projectiles[i].dir = NOWHERE;
     }
 
     while (!WindowShouldClose()){
         deltaTime = GetFrameTime();
         camera.target = (Vector2){Clamp(players[0].spr.x + HALF_SIZE, resolutionW/2, TILE_SIZE * map.cols - resolutionW/2), Clamp(players[0].spr.y + HALF_SIZE, resolutionH/2, TILE_SIZE * map.rows - resolutionH/2)};
-        animPlayer.frameDuration = 0.5f/(speed == 2 ? 1 : 3);
+        animPlayer.frameDuration = 0.5f / (speed == 2 ? 1 : 3);
 
         //Start rendering
+        HideCursor();
         BeginDrawing();
         ClearBackground(BLACK);
         BeginMode2D(camera);
 
-        DrawMap(&map, data, dataLength, textures, &animPlayer, &animPortal);
-
-        Vector2 mouse = GetMousePosition();
-        float angle = CalculateAngle((Vector2){(float)players[0].box.x+HALF_SIZE, (float)players[0].box.y+HALF_SIZE}, mouse);
-        HideCursor();
-        float rotation;
-        if (angle >= 45 && angle < 135) rotation = 0;
-        if (angle >= 135 && angle < 225) rotation = 90;
-        if (angle >= 225 && angle < 315) rotation = 180;
-        if (angle >= 315 || angle < 45) rotation = 270;
+        //Cursor values
         Vector2 origin = { textures[0].texture.width / 2.0f, textures[0].texture.height / 2.0f };
-        DrawTexturePro(textures[0].texture, (Rectangle){ 0, 0, (float)textures[0].texture.width, (float)textures[0].texture.height }, (Rectangle){mouse.x, mouse.y, (float)textures[0].texture.width, (float)textures[0].texture.height}, origin, rotation, WHITE);
+        Vector2 cursor = GetMousePosition();
+        cursor = GetScreenToWorld2D(cursor, camera);
+        float angle = CalculateAngle((Vector2){(float)players[0].box.x + HALF_SIZE, (float)players[0].box.y + HALF_SIZE}, cursor);
+        float rotation;
 
-        DrawText(keysUI, camera.target.x+270, camera.target.y+250, 30, WHITE);
+        if (angle >= 45 && angle < 135) rotation = 0;
+        else if (angle >= 135 && angle < 225) rotation = 90;
+        else if (angle >= 225 && angle < 315) rotation = 180;
+        else rotation = 270;
 
-        //Input
+        //Rendering
+        DrawMap(&map, data, dataLength, textures, &animPlayer, &animPortal);
+        DrawTexturePro(textures[0].texture, (Rectangle){ 0, 0, (float)textures[0].texture.width, (float)textures[0].texture.height }, (Rectangle){cursor.x, cursor.y, (float)textures[0].texture.width, (float)textures[0].texture.height}, origin, rotation, WHITE);
+        DrawText(keysUI, camera.target.x + 270, camera.target.y + 250, 30, WHITE);
+
+        //Controls
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
-            printf("%f\n", angle);
             for (int i = 0; i < 2; i++){
-                if  (!projectiles[i].active){
-                    projectiles[i].position = (Vector2){players[0].box.x + HALF_SIZE, players[0].box.y + HALF_SIZE};
-                    projectiles[i].active = true;
-                    break;
-                }
+                if  (projectiles[i].dir) continue;
+
+                projectiles[i].position = (Vector2){players[0].box.x + HALF_SIZE, players[0].box.y + HALF_SIZE};
+
+                if (rotation == 0) projectiles[i].dir = UP;
+                else if (rotation == 90) projectiles[i].dir = RIGHT;
+                else if (rotation == 180) projectiles[i].dir = DOWN;
+                else projectiles[i].dir = LEFT;
+
+                break;
             }
         }
 
         int PosX, PosY, remX, remY;
         for (int i = 0; i < 2; i++){
-            if  (projectiles[i].active){
-                remX = (int)(projectiles[i].position.x - HALF_SIZE) % TILE_SIZE;
-                remY = (int)(projectiles[i].position.y - HALF_SIZE) % TILE_SIZE;
-                PosX = (projectiles[i].position.x - HALF_SIZE + remX) / TILE_SIZE;
-                PosY = (projectiles[i].position.y - HALF_SIZE + remY) / TILE_SIZE;
+            if  (!projectiles[i].dir) continue;
 
-                if (PosX < 0 || PosX > map.cols-1 || PosY < 0 || PosY > map.rows-1){
-                    projectiles[i].active = false;
-                    PosX = PosY = 0;
-                    continue;
-                }
+            remX = (int)(projectiles[i].position.x - HALF_SIZE) % TILE_SIZE;
+            remY = (int)(projectiles[i].position.y - HALF_SIZE) % TILE_SIZE;
+            PosX = (projectiles[i].position.x - HALF_SIZE + remX) / TILE_SIZE;
+            PosY = (projectiles[i].position.y - HALF_SIZE + remY) / TILE_SIZE;
 
-                if (atoi(map.array[PosY][PosX]) == PUDDLE){
-                    projectiles[i].active = false;
-
-                    zapWater(&map, PosX, PosY);
-                    restoreWater(&map, PosX, PosY);
-                    continue;
-                }
-
-                DrawCircleV((Vector2){(float)projectiles[i].position.x, (float)projectiles[i].position.y}, 15, YELLOW);
-                projectiles[i].position.x += 30;
+            if (PosX < 0 || PosX > map.cols-1 || PosY < 0 || PosY > map.rows-1){
+                projectiles[i].dir = NOWHERE;
+                PosX = PosY = 0;
+                continue;
             }
+
+            if (atoi(map.array[PosY][PosX]) == PUDDLE){
+                projectiles[i].dir = NOWHERE;
+
+                zapWater(&map, PosX, PosY);
+                restoreWater(&map, PosX, PosY);
+                continue;
+            }
+
+            DrawCircleV((Vector2){(float)projectiles[i].position.x, (float)projectiles[i].position.y}, 15, YELLOW);
+            projectiles[i].position.x += (((projectiles[i].dir == RIGHT) - (projectiles[i].dir == LEFT)) * 30);
+            projectiles[i].position.y += (((projectiles[i].dir == DOWN) - (projectiles[i].dir == UP)) * 30);
         }
 
         int moveKeys[] = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_S, KEY_A, KEY_D, -1};
         int keyPressed = IsAnyOfKeysPressed(moveKeys);
 
-
         if (keyPressed && !timer){
             switch (keyPressed){
-                case KEY_UP:
-                case KEY_W:
+                case KEY_W: case KEY_UP:
                     goToDir = UP;
                     break;
-                case KEY_DOWN:
-                case KEY_S:
+                case KEY_S: case KEY_DOWN:
                     goToDir = DOWN;
                     break;
-                case KEY_LEFT:
-                case KEY_A:
+                case KEY_A: case KEY_LEFT:
                     goToDir = LEFT;
                     break;
-                case KEY_RIGHT:
-                case KEY_D:
+                case KEY_D: case KEY_RIGHT:
                     goToDir = RIGHT;
                     break;
                 default:
@@ -214,7 +217,7 @@ int main(void){
 
         //Collision testing door
         if (
-            atoi(tileCode) == 4 &&
+            atoi(tileCode) == DOOR &&
             CheckCollisionPoints(players[0].box, doors[tileIndex].position) &&
             !doors[tileIndex].active
         ){
@@ -275,7 +278,7 @@ int main(void){
 
         //Collect key
         if (
-            atoi(tileCode) == 5 &&
+            atoi(tileCode) == KEY &&
             CheckCollisionPoints(players[0].spr, keys[tileIndex].position) &&
             !keys[tileIndex].active
         ){

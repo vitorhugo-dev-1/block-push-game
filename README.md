@@ -1,2 +1,22 @@
-# raylib-vscode-template
-raylib template for Visual Studio Code
+Dictionary:
+
+00 - EMPTY,
+01 - PLAYER,
+02 - WALL,
+03 - CRATE,
+04 - LOCKED DOOR - GENERIC,
+05 - KEY - GENERIC,
+06 - PUDDLE,
+Pn - PORTAL,
+
+Todo:
+
+PRESSURE PLATE
+SWITCH?
+DEEP WATER
+DESTRUCTIBLE WALL
+GAP
+FLAMMABLE OIL
+Cd - CONVEYOR BELT
+CRUMBLING GROUND
+SHOOTING BLOCK

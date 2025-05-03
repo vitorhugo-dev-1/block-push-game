@@ -122,11 +122,11 @@ void DrawMap(const CSV *map, void *data[], const int dataLength[], TextureData t
     int yEnd = yStart, xEnd = xStart;
     bool halved = false;
 
-    if (atoi(map->array[yStart][xStart]) == 6){
-        if (yStart < map->rows && atoi(map->array[yStart+1][xStart]) == 6) yEnd++;
-        if (xStart < map->cols && atoi(map->array[yStart][xStart+1]) == 6) xEnd++;
-        if (yStart > 0 && atoi(map->array[yStart-1][xStart]) == 6) yStart--;
-        if (xStart > 0 && atoi(map->array[yStart][xStart-1]) == 6) xStart--;
+    if (atoi(map->array[yStart][xStart]) == PUDDLE){
+        if (yStart < map->rows && atoi(map->array[yStart+1][xStart]) == PUDDLE) yEnd++;
+        if (xStart < map->cols && atoi(map->array[yStart][xStart+1]) == PUDDLE) xEnd++;
+        if (yStart > 0 && atoi(map->array[yStart-1][xStart]) == PUDDLE) yStart--;
+        if (xStart > 0 && atoi(map->array[yStart][xStart-1]) == PUDDLE) xStart--;
 
         if (
             players[0].spr.x >= xStart * TILE_SIZE && players[0].spr.x <= xEnd * TILE_SIZE &&
@@ -134,20 +134,6 @@ void DrawMap(const CSV *map, void *data[], const int dataLength[], TextureData t
         ) halved = true;
     }
 
-/*     bool halved, vStart, vEnd, hStart, hEnd;
-    halved = vStart = vEnd = hStart = hEnd = false;
-
-    for (int i = 0; i < dataLength[PUDDLE]; i++){ //Looping through every puddle item might not be efficient when testing collision, I should revise this later
-        if (players[0].spr.x >= puddles[i].x) hStart = true;
-        if (players[0].spr.y >= puddles[i].y) vStart = true;
-        if (players[0].spr.x + TILE_SIZE <= puddles[i].x + TILE_SIZE) hEnd = true;
-        if (players[0].spr.y + TILE_SIZE <= puddles[i].y + TILE_SIZE) vEnd = true;
-
-        if (vStart && vEnd && hStart && hEnd){
-            halved = true;
-            break;
-        }
-    } */
     DrawRectangle(players[0].box.x, players[0].box.y, TILE_SIZE, TILE_SIZE, GRAY);
     Animate(animPlayer, players[0].spr.x, players[0].spr.y, BLUE, halved);
 
