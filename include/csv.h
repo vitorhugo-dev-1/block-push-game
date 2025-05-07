@@ -32,6 +32,9 @@ void calcLengthsCSV(const char *fileName, CSV *csv, int cellSize, int dataLength
                 dataLength[atoi(element)]++;
             } else {
                 switch (element[0]){
+                    case 'C':
+                        dataLength[CONVEYOR]++;
+                        break;
                     case 'P':
                         dataLength[PORTAL]++;
                         break;
@@ -144,6 +147,19 @@ void LoadSingularObject(void *data[], const int objectType, const int iteration,
     }
 }
 
+//Loads into an array a map object that's not directly linked to any other object in the same map
+void LoadGroupedObject(void *data[], const char objectType[3], const int iteration, Vector2 position){
+    DirItem *conveyors = (DirItem *)data[CONVEYOR];
+
+    switch (objectType[0]){
+        case 'C':{
+            DirItem newConveyor = {position, (Direction)(objectType[1] - '0')};
+            conveyors[iteration] = newConveyor;
+            break;
+        }
+    }
+}
+
 //Loads into an array a map object that's directly linked to another one in the same map
 void LoadLinkedObject(void *data[], const char *objectType, int *dataIndex, int iterator[], const int dataLength[], Vector2 position){
     Portals *portals = (Portals *)data[PORTAL];
@@ -185,6 +201,11 @@ void PopulateData(void *data[], const CSV *map, const int dataLength[]){
                 LoadSingularObject(data, objectType, iterator[objectType], position);
                 map->dataIndex[y][x] = iterator[objectType];
                 iterator[objectType]++;
+            } else if (map->array[y][x][0] == 'C'){
+                if (iterator[CONVEYOR] > dataLength[CONVEYOR]) Error("Array index out of bounds\n");
+                LoadGroupedObject(data, map->array[y][x], iterator[CONVEYOR], position);
+                map->dataIndex[y][x] = iterator[CONVEYOR];
+                iterator[CONVEYOR]++;
             } else {
                 LoadLinkedObject(data, map->array[y][x], &map->dataIndex[y][x], iterator, dataLength, position);
             }

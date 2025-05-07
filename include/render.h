@@ -14,13 +14,26 @@ Texture2D LoadTextureFromFile(const char *fileName){
 }
 
 //Loads all images from a folder into an array of textures
-void LoadTexturesFromFolder(const char *folderPath, TextureData *textures){
+void LoadTexturesFromFolder(const char *folderPath, Texture2D *textures){
     FilePathList files = LoadDirectoryFiles(folderPath);
     if (!files.count) Error("Could not open texture directory.\n");
 
     for (unsigned int i = 0; i < files.count; i++){
-        textures[i].texture = LoadTextureFromFile(files.paths[i]);
-        strncpy(textures[i].filename, files.paths[i], sizeof(textures[i].filename) - 1);
+        char *fileName = strrchr(files.paths[i], '\\') + 1;
+        char fileCode[3];
+        strncpy(fileCode, fileName, 2);
+        int objectCode = atoi(fileCode);
+
+        if (objectCode >= END){
+            printf("WARNING: Found texture with ID=%d which is higher than any of the known objects, will be proceeding without it.\n", objectCode);
+            continue;
+        }
+
+        textures[objectCode] = LoadTextureFromFile(files.paths[i]);
+    }
+
+    for (unsigned int i = 0; i < END; i++){
+        if (!textures[i].height) printf("WARNING: Couldn't find texture for object with ID=%d, proceeding without it.\n", i);
     }
 
     UnloadDirectoryFiles(files);
@@ -73,18 +86,19 @@ void Rotate(Animation* anim, int posX, int posY, Color color, float degrees, int
 }
 
 //Draws every element from the loaded map
-void DrawMap(const CSV *map, void *data[], const int dataLength[], TextureData textures[], Animation *animPlayer, Animation *animPortal){
+void DrawMap(const CSV *map, void *data[], const int dataLength[], Texture2D textures[], Animation *animPlayer, Animation *animPortal){
     Entity *players = (Entity *)data[PLAYER];
     Vector2 *walls = (Vector2 *)data[WALL];
     Vector2 *puddles = (Vector2 *)data[PUDDLE];
     Item *doors = (Item *)data[DOOR];
     Item *keys = (Item *)data[KEY];
+    DirItem *conveyors = (DirItem *)data[CONVEYOR];
     Portals *portals = (Portals *)data[PORTAL];
     Entity *crates = (Entity *)data[CRATE];
 
     //Draw Walls
     for (int i = 0; i < dataLength[WALL]; i++){
-        DrawTexture(textures[WALL].texture, walls[i].x, walls[i].y, GRAY);
+        DrawTexture(textures[WALL], walls[i].x, walls[i].y, GRAY);
     }
 
     //Draw Puddles
@@ -92,18 +106,23 @@ void DrawMap(const CSV *map, void *data[], const int dataLength[], TextureData t
         DrawRectangle(puddles[i].x, puddles[i].y, TILE_SIZE, TILE_SIZE, BLUE);
     }
 
+    //Draw Conveyor Belts
+    for (int i = 0; i < dataLength[CONVEYOR]; i++){
+        int rotation = (conveyors[i].dir * 90) - 90;
+        DrawTexturePro(textures[CONVEYOR], (Rectangle){ 0, 0, (float)textures[CONVEYOR].width, (float)textures[CONVEYOR].height }, (Rectangle){conveyors[i].position.x + HALF_SIZE, conveyors[i].position.y + HALF_SIZE, (float)textures[CONVEYOR].width, (float)textures[CONVEYOR].height}, (Vector2){HALF_SIZE, HALF_SIZE}, rotation, WHITE);
+    }
+
     //Draw Doors
-    Rectangle doorFrameRec = { 0.0f, 0.0f, (float)textures[DOOR].texture.width/2, (float)textures[DOOR].texture.height };
+    Rectangle doorFrameRec = { 0.0f, 0.0f, (float)textures[DOOR].width/2, (float)textures[DOOR].height };
     for (int i = 0; i < dataLength[DOOR]; i++){
-        doorFrameRec.x = 0;
         if (doors[i].active) doorFrameRec.x = 64;
-        DrawTextureRec(textures[DOOR].texture, doorFrameRec, (Vector2){(float)doors[i].position.x, (float)doors[i].position.y}, WHITE);
+        DrawTextureRec(textures[DOOR], doorFrameRec, (Vector2){(float)doors[i].position.x, (float)doors[i].position.y}, WHITE);
     }
 
     //Draw Keys
     for (int i = 0; i < dataLength[KEY]; i++){
         if (!keys[i].active){
-            DrawTexture(textures[KEY].texture, keys[i].position.x, keys[i].position.y, YELLOW);
+            DrawTexture(textures[KEY], keys[i].position.x, keys[i].position.y, YELLOW);
         }
     }
 
@@ -140,6 +159,6 @@ void DrawMap(const CSV *map, void *data[], const int dataLength[], TextureData t
     //Draw crates
     for (int i = 0; i < dataLength[CRATE]; i++){
         DrawRectangle(crates[i].box.x, crates[i].box.y, TILE_SIZE, TILE_SIZE, WHITE);
-        DrawTexture(textures[CRATE].texture, crates[i].spr.x, crates[i].spr.y, BROWN);
+        DrawTexture(textures[CRATE], crates[i].spr.x, crates[i].spr.y, BROWN);
     }
 }

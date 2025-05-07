@@ -14,6 +14,7 @@ typedef enum Dictionary {
     DOOR,
     KEY,
     PUDDLE,
+    CONVEYOR,
     PORTAL,
     END
 } Dictionary;
@@ -25,9 +26,6 @@ typedef enum Direction {
     DOWN,
     LEFT
 } Direction;
-
-//Declaring structs for general usage
-typedef struct TextureData {Texture2D texture; char filename[256];} TextureData;
 
 //Declaring structs for map objects
 typedef struct Entity {Vector2 box, spr;} Entity;

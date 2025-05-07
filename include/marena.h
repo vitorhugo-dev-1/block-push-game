@@ -37,13 +37,14 @@ void* ArenaReserveMemory(MemoryArena* arena, size_t size){
 
 //Reserves memory for the game's objects
 void ArenaReserveMemoryObjects(MemoryArena *arena, void *data[], int dataLength[], int structSize[]){
-    data[PLAYER] =  (Entity *)ArenaReserveMemory(arena, dataLength[PLAYER] * structSize[PLAYER]);
-    data[WALL]   = (Vector2 *)ArenaReserveMemory(arena, dataLength[WALL]   * structSize[WALL]);
-    data[CRATE]  =  (Entity *)ArenaReserveMemory(arena, dataLength[CRATE]  * structSize[CRATE]);
-    data[DOOR]   =    (Item *)ArenaReserveMemory(arena, dataLength[DOOR]   * structSize[DOOR]);
-    data[KEY]    =    (Item *)ArenaReserveMemory(arena, dataLength[KEY]    * structSize[KEY]);
-    data[PUDDLE] = (Vector2 *)ArenaReserveMemory(arena, dataLength[PUDDLE] * structSize[PUDDLE]);
-    data[PORTAL] = (Portals *)ArenaReserveMemory(arena, ((dataLength[PORTAL]/2) - (dataLength[PORTAL] % 2)) * structSize[PORTAL]);
+    data[PLAYER]   =  (Entity *)ArenaReserveMemory(arena, dataLength[PLAYER]   * structSize[PLAYER]);
+    data[WALL]     = (Vector2 *)ArenaReserveMemory(arena, dataLength[WALL]     * structSize[WALL]);
+    data[CRATE]    =  (Entity *)ArenaReserveMemory(arena, dataLength[CRATE]    * structSize[CRATE]);
+    data[DOOR]     =    (Item *)ArenaReserveMemory(arena, dataLength[DOOR]     * structSize[DOOR]);
+    data[KEY]      =    (Item *)ArenaReserveMemory(arena, dataLength[KEY]      * structSize[KEY]);
+    data[PUDDLE]   = (Vector2 *)ArenaReserveMemory(arena, dataLength[PUDDLE]   * structSize[PUDDLE]);
+    data[CONVEYOR] = (DirItem *)ArenaReserveMemory(arena, dataLength[CONVEYOR] * structSize[CONVEYOR]);
+    data[PORTAL]   = (Portals *)ArenaReserveMemory(arena, ((dataLength[PORTAL]/2) - (dataLength[PORTAL] % 2)) * structSize[PORTAL]);
 }
 
 //Reset the memory arena

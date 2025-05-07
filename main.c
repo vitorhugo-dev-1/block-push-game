@@ -9,7 +9,17 @@ int main(void){
 
     //Map object variables
     void *data[END];
-    int structSize[END] = {NULL, sizeof(Entity), sizeof(Vector2), sizeof(Entity), sizeof(Portals), sizeof(Item), sizeof(Item), sizeof(Vector2)};
+    int structSize[END] = {
+        NULL,            //Empty space
+        sizeof(Entity),  //Player character
+        sizeof(Vector2), //Wall
+        sizeof(Entity),  //Crate
+        sizeof(Item),    //Door
+        sizeof(Item),    //Key
+        sizeof(Vector2), //Puddle
+        sizeof(DirItem), //Conveyor
+        sizeof(Portals)  //Portal
+    };
     int dataLength[END];
     memset(dataLength, 0, sizeof(dataLength));
 
@@ -33,21 +43,22 @@ int main(void){
     PopulateData(data, &map, dataLength);
 
     Entity *players = (Entity *)data[PLAYER];
-    //Block *walls = (Block *)data[WALL];
+    //Vector2 *walls = (Block *)data[WALL];
     Entity *crates = (Entity *)data[CRATE];
     Item *doors = (Item *)data[DOOR];
     Item *keys = (Item *)data[KEY];
-    //Block *puddles = (Block *)data[PUDDLE];
+    //Vector2 *puddles = (Block *)data[PUDDLE];
+    //DirItem *conveyors = (DirItem *)data[CONVEYOR];
     Portals *portals = (Portals *)data[PORTAL];
 
     InitWindow(resolutionW, resolutionH, title);
     SetTargetFPS(60);
 
-    TextureData textures[END];
+    Texture2D textures[END] = { NULL };
     LoadTexturesFromFolder("./images", textures);
 
-    Animation animPlayer = InitAnimValues(&textures[PLAYER].texture, 0, 0.5f, 2);
-    Animation animPortal = InitAnimValues(&textures[PORTAL].texture, 0, 5.0f, 1);
+    Animation animPlayer = InitAnimValues(&textures[PLAYER], 0, 0.5f, 2);
+    Animation animPortal = InitAnimValues(&textures[PORTAL], 0, 5.0f, 1);
 
     DirItem projectiles[3];
     for (int i = 0; i < 2; i++){
@@ -66,7 +77,7 @@ int main(void){
         BeginMode2D(camera);
 
         //Cursor values
-        Vector2 origin = { textures[0].texture.width / 2.0f, textures[0].texture.height / 2.0f };
+        Vector2 origin = { textures[0].width / 2.0f, textures[0].height / 2.0f };
         Vector2 cursor = GetMousePosition();
         cursor = GetScreenToWorld2D(cursor, camera);
         float angle = CalculateAngle((Vector2){(float)players[0].box.x + HALF_SIZE, (float)players[0].box.y + HALF_SIZE}, cursor);
@@ -79,7 +90,7 @@ int main(void){
 
         //Rendering
         DrawMap(&map, data, dataLength, textures, &animPlayer, &animPortal);
-        DrawTexturePro(textures[0].texture, (Rectangle){ 0, 0, (float)textures[0].texture.width, (float)textures[0].texture.height }, (Rectangle){cursor.x, cursor.y, (float)textures[0].texture.width, (float)textures[0].texture.height}, origin, rotation, WHITE);
+        DrawTexturePro(textures[0], (Rectangle){ 0, 0, (float)textures[0].width, (float)textures[0].height }, (Rectangle){cursor.x, cursor.y, (float)textures[0].width, (float)textures[0].height}, origin, rotation, WHITE);
         DrawText(keysUI, camera.target.x + 270, camera.target.y + 250, 30, WHITE);
 
         //Controls
@@ -156,11 +167,13 @@ int main(void){
         //Collision testing
         int gridX = players[0].box.x / TILE_SIZE;
         int gridY = players[0].box.y / TILE_SIZE;
+        int tileIndex;
         char tileCode[cellSize+1];
-        strcpy(tileCode, map.array[gridY][gridX]);
-        int tileIndex = map.dataIndex[gridY][gridX];
 
         if (IsInsideMap((Vector2){(float)gridX, (float)gridY}, map)){
+            strcpy(tileCode, map.array[gridY][gridX]);
+            tileIndex = map.dataIndex[gridY][gridX];
+    
             if (isdigit(*tileCode)){
                 switch (atoi(tileCode)){
                     case WALL:{
@@ -276,6 +289,14 @@ int main(void){
             }
         }
 
+        //Collision testing conveyor belt
+        if (tileCode[0] == 'C' && !timer){
+            goToDir = (Direction)(tileCode[1]-'0');
+            players[0].box.y += (((goToDir == UP)*-1) + (goToDir == DOWN)) * TILE_SIZE;
+            players[0].box.x += (((goToDir == LEFT)*-1) + (goToDir == RIGHT)) * TILE_SIZE;
+            timer = TILE_SIZE;
+        }
+
         //Collect key
         if (
             atoi(tileCode) == KEY &&
@@ -293,7 +314,7 @@ int main(void){
 
     //Frees the allocated memory and ends the program
     for (int i = 0; i < END; i++) {
-        UnloadTexture(textures[i].texture);
+        UnloadTexture(textures[i]);
     }
     ArenaFree(&arena);
     CloseWindow();
