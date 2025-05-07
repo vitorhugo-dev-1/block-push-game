@@ -200,7 +200,9 @@ int main(void){
                                 !IsInsideMap((Vector2){(float)crateX, (float)crateY}, map) ||
                                 cratePosition == WALL ||
                                 cratePosition == CRATE ||
-                                cratePosition == DOOR
+                                cratePosition == DOOR ||
+                                cratePosition == PUDDLE ||
+                                map.array[crateY][crateX][0] == 'C'
                             ){
                                 players[0].box.x = players[0].spr.x;
                                 players[0].box.y = players[0].spr.y;
