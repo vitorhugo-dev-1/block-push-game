@@ -5,7 +5,7 @@
 
 //Prints an error and terminates the program
 void Error(const char *message){
-    fprintf(stderr, "%s", message);
+    perror(message);
     exit(EXIT_FAILURE);
 }
 
@@ -23,7 +23,24 @@ float CalculateAngle(Vector2 origin, Vector2 end){
 
 //Compares if the first value is higher, lower or equal to the second value
 int IsHigherOrLower(int num1, int num2){
-    if (num1 > num2){return 1;}
-    else if (num1 < num2){return -1;}
+    if (num1 > num2){ return 1; }
+    else if (num1 < num2){ return -1; }
     return 0;
+}
+
+//Determines the destination of a Direction variable along a specified axis
+int DetectDestinationDir(Direction dir, bool isHorizontal){
+    if (isHorizontal) return ((dir == RIGHT) - (dir == LEFT));
+    else return ((dir == DOWN) - (dir == UP));
+}
+
+Vector2 GetTileCenter(Vector2 position){
+    return (Vector2){ position.x + HALF_SIZE, position.y + HALF_SIZE };
+}
+
+int SnapToTile(int value){
+    int remainder = (int)(value - HALF_SIZE) % TILE_SIZE;
+    int position  = (int)(value - HALF_SIZE + remainder) / TILE_SIZE;
+
+    return position;
 }

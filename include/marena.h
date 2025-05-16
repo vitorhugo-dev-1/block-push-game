@@ -4,22 +4,19 @@
 #include <defndec.h>
 #include <util.h>
 
-typedef struct MemoryArena {void* buffer; size_t size, used;} MemoryArena;
+typedef struct MemoryArena { void* buffer; size_t size, used; } MemoryArena;
 
 //Initializes MemoryArena struct and allocates the informed size
-void ArenaMalloc(MemoryArena* arena, size_t size){
-    arena->size = size;
-    arena->used = 0;
-    arena->buffer = malloc(size);
-    if (arena->buffer == NULL) Error("Failed to allocate memory\n");
+MemoryArena ArenaMalloc(size_t size){
+    MemoryArena arena = { .buffer = malloc(size), .size = size, .used = 0 };
+    if (arena.buffer == NULL) Error("Failed to allocate memory\n");
+    return arena;
 }
 
 // Frees the memory allocated for the informed arena
 void ArenaFree(MemoryArena* arena){
     free(arena->buffer);
-    arena->buffer = NULL;
-    arena->size = 0;
-    arena->used = 0;
+    memset(arena, 0, sizeof(*arena));
 }
 
 //Reserves memory from the arena
