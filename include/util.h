@@ -34,8 +34,11 @@ int DetectDestinationDir(Direction dir, bool isHorizontal){
     else return ((dir == DOWN) - (dir == UP));
 }
 
-Vector2 GetTileCenter(Vector2 position){
-    return (Vector2){ position.x + HALF_SIZE, position.y + HALF_SIZE };
+Entity GetEntityCenter(Entity position){
+    return (Entity){
+        { position.box.x + HALF_SIZE, position.box.y + HALF_SIZE },
+        { position.spr.x + HALF_SIZE, position.spr.y + HALF_SIZE }
+    };
 }
 
 int SnapToTile(int value){

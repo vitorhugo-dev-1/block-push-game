@@ -33,7 +33,7 @@ void* ArenaReserveMemory(MemoryArena* arena, size_t size){
 }
 
 //Reserves memory for the game's objects
-void ArenaReserveMemoryObjects(MemoryArena *arena, void *data[], int dataLength[], int structSize[]){
+void ArenaReserveObjects(MemoryArena *arena, void *data[], int dataLength[], int structSize[]){
     data[PLAYER]   =  (Entity *)ArenaReserveMemory(arena, dataLength[PLAYER]   * structSize[PLAYER]);
     data[WALL]     = (Vector2 *)ArenaReserveMemory(arena, dataLength[WALL]     * structSize[WALL]);
     data[CRATE]    =  (Entity *)ArenaReserveMemory(arena, dataLength[CRATE]    * structSize[CRATE]);

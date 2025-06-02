@@ -1,5 +1,7 @@
 #pragma once
 
+#define MAX_SHOTS 1
+#define CELL_SIZE 2
 #define TILE_SIZE 64
 #define HALF_SIZE (TILE_SIZE/2)
 
@@ -44,6 +46,21 @@ typedef struct Animation {
     float frameTimer;
     float rotation;
 } Animation;
+
+typedef struct Window {
+    char title[20];
+    int width, height, center_w, center_h;
+} Window;
+
+typedef struct UI_Element {
+    char display[20];
+    int counter;
+} UI_Element;
+
+typedef struct TileInfo {
+    int x, y, index;
+    char code[CELL_SIZE+1];
+} TileInfo;
 
 //Initializes Animation struct with the informed values
 Animation InitAnimValues(Texture2D *texture, int startingRow, float duration, int totalFrames){

@@ -10,11 +10,11 @@ typedef struct CSV { char ***array; int rows, cols; int ** dataIndex; } CSV;
 
 //Calculates how many elements are present in a CSV file and
 //how many of each object are present in that same CSV
-CSV CalcLengthsCSV(const char *fileName, const int cellSize, int dataLength[]){
+CSV CalcLengthsCSV(const char *fileName, int dataLength[]){
     FILE *file = fopen(fileName, "r");
     if (!file) Error("Unable to open file\n");
 
-    char ch, element[cellSize+1];
+    char ch, element[CELL_SIZE+1];
     int counter = 0;
     CSV csv = { NULL, 1, 1, NULL };
 
@@ -31,7 +31,7 @@ CSV CalcLengthsCSV(const char *fileName, const int cellSize, int dataLength[]){
         element[counter] = ch;
         counter++;
 
-        if (counter != cellSize) continue;
+        if (counter != CELL_SIZE) continue;
 
         if (!isdigit(*element)){
             switch (element[0]){
@@ -50,13 +50,10 @@ CSV CalcLengthsCSV(const char *fileName, const int cellSize, int dataLength[]){
 }
 
 //Calculates how many bytes of memory the map data will use
-size_t ArenaCalcMapMemorySize(
-    const CSV map, const int cellSize, const int dataLength[], const int structSize[]
-){
-
+size_t CalcMapMemorySize(const CSV map, const int dataLength[], const int structSize[]){
     size_t size = (map.rows * sizeof(char **)) +
                   (map.rows * (map.cols * sizeof(char *))) +
-                  (map.rows * map.cols * (cellSize + 1) * sizeof(char))
+                  (map.rows * map.cols * (CELL_SIZE + 1) * sizeof(char))
                   +
                   (map.rows * sizeof(int *)) +
                   (map.rows * (map.cols * sizeof(int)));
@@ -68,7 +65,7 @@ size_t ArenaCalcMapMemorySize(
 }
 
 //Function to generate a 2D array with csv cell values for the CSV struct
-void GenerateArrayFromCSV(const char *fileName, CSV *csv, const int cellSize, MemoryArena *arena){
+void GenerateArrayFromCSV(const char *fileName, CSV *csv, MemoryArena *arena){
     FILE *file = fopen(fileName, "r");
     if (!file) Error("Unable to open file\n");
 
@@ -81,8 +78,8 @@ void GenerateArrayFromCSV(const char *fileName, CSV *csv, const int cellSize, Me
         csv->dataIndex[i] =   (int *)ArenaReserveMemory(arena, csv->cols * sizeof(int));
         
         for (int j = 0; j < csv->cols; j++){
-            csv->array[i][j] = (char *)ArenaReserveMemory(arena, (cellSize + 1) * sizeof(char));
-            memset(csv->array[i][j], 0, (cellSize + 1) * sizeof(char));
+            csv->array[i][j] = (char *)ArenaReserveMemory(arena, (CELL_SIZE + 1) * sizeof(char));
+            memset(csv->array[i][j], 0, (CELL_SIZE + 1) * sizeof(char));
         }
     }
 
@@ -103,7 +100,7 @@ void GenerateArrayFromCSV(const char *fileName, CSV *csv, const int cellSize, Me
         }
 
         csv->array[csv->rows][csv->cols][digit] = ch;
-        if (digit == cellSize - 1) csv->array[csv->rows][csv->cols][digit + 1] = '\0';
+        if (digit == CELL_SIZE - 1) csv->array[csv->rows][csv->cols][digit + 1] = '\0';
         digit++;
     }
     csv->rows++;
