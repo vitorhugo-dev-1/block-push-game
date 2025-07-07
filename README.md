@@ -1,22 +1,3 @@
-Dictionary:
-
-00 - EMPTY,
-01 - PLAYER,
-02 - WALL,
-03 - CRATE,
-04 - LOCKED DOOR - GENERIC,
-05 - KEY - GENERIC,
-06 - PUDDLE,
-Cn - CONVEYOR BELT,
-Pn - PORTAL,
-
-Todo:
-
-PRESSURE PLATE
-SWITCH
-DEEP WATER
-DESTRUCTIBLE WALL
-GAP
-FLAMMABLE OIL
-CRUMBLING GROUND
-SHOOTING BLOCK
+## Installation guide
+1. Access the following link: [slightly-radioactive.itch.io/game-prototype](https://slightly-radioactive.itch.io/game-prototype)
+2. Follow the instructions on the description.
