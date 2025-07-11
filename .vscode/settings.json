@@ -10,11 +10,6 @@
 	},
 	"files.associations": {
 		"*.embeddedhtml": "html",
-		"raylib.h": "c",
-		"stdio.h": "c",
-		"mylib.h": "c",
-		"stdlib.h": "c",
-		"math.h": "c",
-		"marena.h": "c"
+		"*.h": "c",
 	}
 }

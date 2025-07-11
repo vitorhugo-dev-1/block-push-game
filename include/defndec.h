@@ -76,3 +76,11 @@ Animation InitAnimValues(Texture2D *texture, int startingRow, float duration, in
     };
     return anim;
 };
+
+int getDictionaryValue(char ch){
+    switch (ch){
+        case 'C': return CONVEYOR;
+        case 'P': return PORTAL;
+        default : return false;
+    }
+}

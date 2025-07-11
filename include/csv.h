@@ -109,77 +109,6 @@ void GenerateArrayFromCSV(const char *fileName, CSV *csv, MemoryArena *arena){
     fclose(file);
 }
 
-//Loads into an array a map object that's not directly linked to any other object in the same map
-void LoadSingularObject(void *data[], const int objectType, const int iteration, const Vector2 position) {
-    if (iteration < 0) Error("Iteration is not valid");  // Ensure iteration is valid
-
-    switch (objectType){
-        case PLAYER: case CRATE:{
-            Entity *entities = (Entity *)data[objectType];
-            entities[iteration] = (Entity){ position, position };
-            break;
-        }
-        case WALL: case PUDDLE:{
-            Vector2 *vectors = (Vector2 *)data[objectType];
-            vectors[iteration] = position;
-            break;
-        }
-        case DOOR: case KEY:{
-            Item *items = (Item *)data[objectType];
-            items[iteration] = (Item){ position, false };
-            break;
-        }
-    }
-}
-
-//Loads into an array a map object that's not directly linked to any other object in the same map
-void LoadGroupedObject(void *data[], const char objectType[3], const int iteration, const Vector2 position){
-    switch (objectType[0]){
-        case 'C':{
-            DirItem *conveyors = (DirItem *)data[CONVEYOR];
-            conveyors[iteration] = (DirItem){ position, (Direction)(objectType[1] - '0') };
-            break;
-        }
-    }
-}
-
-//Loads into an array a map object that's directly linked to another one in the same map
-void LoadLinkedObject(
-    void *data[],
-    const char *objectType,
-    int *dataIndex,
-    int iterator[],
-    const int dataLength[],
-    const Vector2 position
-){
-    if (!objectType || strlen(objectType) < 2 || !isdigit(objectType[1])) {
-        Error("Invalid objectType format\n");
-    }
-
-    int index = objectType[1] - '0';
-    *dataIndex = index;
-
-    switch (objectType[0]){
-        case 'P':
-            if (iterator[PORTAL] >= dataLength[PORTAL]) Error("Array index out of bounds\n");
-
-            Portals *portals = (Portals *)data[PORTAL];
-            iterator[PORTAL]++;
-
-            if (!iterator[PORTAL]){
-                portals[iterator[PORTAL]] = (Portals){ position, {-1, -1} };
-                return;
-            }
-
-            if (portals[index].exit.x == -1 || portals[index].exit.y == -1){
-                portals[index].exit = position;
-            } else {
-                portals[index] = (Portals){ position, {-1, -1} };
-            }
-            break;
-    }
-}
-
 //Loads all data inside a CSV into their specific arrays
 void PopulateData(void *data[], CSV *map, const int dataLength[]){
     int iterator[END] = { [0 ... END-1] = 0 };
@@ -187,40 +116,50 @@ void PopulateData(void *data[], CSV *map, const int dataLength[]){
     for (int y = 0; y < map->rows; y++){
         for (int x = 0; x < map->cols; x++){
             Vector2 position = { x * TILE_SIZE, y * TILE_SIZE };
-            int objectType = atoi(map->array[y][x]);
+            int objectType;
 
-            if (isdigit(*map->array[y][x])){
-                if (iterator[objectType] >= dataLength[objectType]) Error("Array index out of bounds\n");
+            if (isdigit(*map->array[y][x])) objectType = atoi(map->array[y][x]);
+            else objectType = getDictionaryValue(map->array[y][x][0]);
 
-                LoadSingularObject(
-                    data,
-                    objectType,
-                    iterator[objectType],
-                    position
-                );
+            int iteration = iterator[objectType];
+            if (iteration >= dataLength[objectType]) Error("Array index out of bounds\n");
 
-            } else if (map->array[y][x][0] == 'C'){
-                if (iterator[CONVEYOR] >= dataLength[CONVEYOR]) Error("Array index out of bounds\n");
+            switch (objectType){
+                case PLAYER: case CRATE:{
+                    Entity *entities = (Entity *)data[objectType];
+                    entities[iteration] = (Entity){ position, position };
+                    break;
+                }
+                case WALL: case PUDDLE:{
+                    Vector2 *vectors = (Vector2 *)data[objectType];
+                    vectors[iteration] = position;
+                    break;
+                }
+                case DOOR: case KEY:{
+                    Item *items = (Item *)data[objectType];
+                    items[iteration] = (Item){ position, false };
+                    break;
+                }
+                case CONVEYOR:{
+                    DirItem *conveyors = (DirItem *)data[CONVEYOR];
+                    conveyors[iteration] = (DirItem){ position, (Direction)(map->array[y][x][1] - '0') };
+                    break;
+                }
+                case PORTAL:{
+                    Portals *portals = (Portals *)data[PORTAL];
+                    int index = map->array[y][x][1] - '0';
 
-                LoadGroupedObject(
-                    data,
-                    map->array[y][x],
-                    iterator[CONVEYOR],
-                    position
-                );
+                    if (portals[index].exit.x != -1 || portals[index].exit.y != -1){
+                        portals[index] = (Portals){ position, {-1, -1} };
+                    } else {
+                        portals[index].exit = position;
+                    }
+                    map->dataIndex[y][x] = index;
+                    iterator[objectType]++;
 
-                objectType = CONVEYOR;
-            } else {
-                LoadLinkedObject(
-                    data,
-                    map->array[y][x],
-                    &map->dataIndex[y][x],
-                    iterator,
-                    dataLength,
-                    position
-                );
-
-                continue;
+                    continue;
+                    break;
+                }
             }
 
             map->dataIndex[y][x] = iterator[objectType];
