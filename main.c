@@ -79,7 +79,7 @@ int main(void){
 
         if (!timer){
             if (keyPressed){
-                InitiateMove(keyPressed, &goToDir, &timer, &players[0]);
+                InitiateMovement(keyPressed, &goToDir, &timer, &players[0]);
             } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
                 ShootProjectile(projectiles, playerCenter.box, ( (rotation / 90) + 1 ));
             }

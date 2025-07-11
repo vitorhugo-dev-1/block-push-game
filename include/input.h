@@ -12,7 +12,7 @@ int IsAnyOfKeysPressed(int *keys){
     return 0;
 }
 
-void InitiateMove(int keyPressed, Direction *goToDir, int *timer, Entity *entity){
+void InitiateMovement(int keyPressed, Direction *goToDir, int *timer, Entity *entity){
     switch (keyPressed){
         case KEY_W: case KEY_UP:    { *goToDir = UP;    break; }
         case KEY_S: case KEY_DOWN:  { *goToDir = DOWN;  break; }

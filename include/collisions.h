@@ -145,19 +145,23 @@ void HandlePreCollisions(TileInfo *tile, CSV *map, void **data, UI_Element *keys
 }
 
 void HandlePostCollisions(
-    TileInfo *tile, CSV *map,
-    void **data, int dataLength[], Direction *goToDir,
-    UI_Element *keysUI, int *timer
+    TileInfo *tile,
+    CSV *map,
+    void **data,
+    int dataLength[],
+    Direction *goToDir,
+    UI_Element *keysUI,
+    int *timer
 ){
-    Entity *players = (Entity *)data[PLAYER];
+    Entity  *players =  (Entity *)data[PLAYER];
     Portals *portals = (Portals *)data[PORTAL];
-    Entity *crates = (Entity *)data[CRATE];
+    Entity  *crates  =  (Entity *)data[CRATE];
 
     // Collide with portals
     if (tile->code[0] == 'P') CheckCollisionPortals(&players[0], portals[tile->index], *goToDir, timer, false, map);
     for (int i = 0; i < dataLength[CRATE]; i++){
-        if (map->array[(int)crates->box.y / TILE_SIZE][(int)crates->box.x / TILE_SIZE][0] == 'P'){
-            int index = map->dataIndex[(int)crates->box.y / TILE_SIZE][(int)crates->box.x / TILE_SIZE];
+        if (map->array[(int)crates[i].box.y / TILE_SIZE][(int)crates[i].box.x / TILE_SIZE][0] == 'P'){
+            int index = map->dataIndex[(int)crates[i].box.y / TILE_SIZE][(int)crates[i].box.x / TILE_SIZE];
             CheckCollisionPortals(&crates[i], portals[index], *goToDir, timer, true, map);
         }
     }
