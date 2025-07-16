@@ -202,6 +202,8 @@ ifeq ($(BUILD_MODE),DEBUG)
     CFLAGS += -g -O0
 else
     CFLAGS += -s -O1
+    # Strip unnecessary data from build
+    CFLAGS += -ffunction-sections -fdata-sections -flto
 endif
 
 # Additional flags for compiler (if desired)
@@ -211,6 +213,8 @@ ifeq ($(PLATFORM),PLATFORM_DESKTOP)
         # resource file contains windows executable icon and properties
         # -Wl,--subsystem,windows hides the console window
         CFLAGS += $(RAYLIB_PATH)/src/raylib.rc.data
+        # NOTE: If you want to see the console window, remove the -Wl,--subsystem,windows flag
+        CFLAGS += -Wl,--subsystem,windows
     endif
     ifeq ($(PLATFORM_OS),LINUX)
         ifeq ($(RAYLIB_LIBTYPE),STATIC)
@@ -278,6 +282,13 @@ endif
 
 # Define library paths containing required libs.
 LDFLAGS = -L.
+
+# Define additional linker flags
+# -Wl,--gc-sections removes unused sections from the output file
+# -flto enables link-time optimization
+ifeq ($(PLATFORM),PLATFORM_DESKTOP)
+    LDFLAGS += -Wl,--gc-sections -flto
+endif
 
 ifneq ($(wildcard $(RAYLIB_RELEASE_PATH)/.*),)
     LDFLAGS += -L$(RAYLIB_RELEASE_PATH)

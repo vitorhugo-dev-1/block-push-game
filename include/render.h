@@ -1,183 +1,210 @@
-#include <defndec.h>
-#include <csv.h>
-#include <util.h>
+#pragma once
 
-//Function to load an image and return a texture
+#include <core_defs.h>
+#include <types.h>
+#include <map_data.h>
+#include <util.h>
+#include <raylib.h>
+
+// Loads an image file and returns a texture
 Texture2D LoadTextureFromFile(const char *fileName){
     Image image = LoadImage(fileName);
-    
-    if (image.width > 16 || image.height > 16)
-        ImageResizeNN(&image, image.width * 4, image.height * 4);
-    else
-        ImageResizeNN(&image, TILE_SIZE, TILE_SIZE);
+    ImageResizeNN(&image, image.width * PIXEL_SCALE, image.height * PIXEL_SCALE);
 
     Texture2D texture = LoadTextureFromImage(image);  // Convert image to texture
     UnloadImage(image);  // Unload image from CPU memory (image data is now in GPU memory)
+
     return texture;
 }
 
-//Loads all images from a folder into an array of textures
+// Loads images from a folder which match a TileType value into an array of textures
 void LoadTexturesFromFolder(const char *folderPath, Texture2D *textures){
     FilePathList files = LoadDirectoryFiles(folderPath);
-    if (!files.count) Error("Could not open texture directory.\n");
+    if (!files.count) Error("Could not open texture directory: %s", folderPath);
 
     for (unsigned int i = 0; i < files.count; i++){
-        char fileCode[3];
-        char *fileName = strrchr(files.paths[i], '\\') + 1;
-        strncpy(fileCode, fileName, 2);
-        int objectCode = atoi(fileCode);
+        const char *fileName = strrchr(files.paths[i], '\\') + 1;
+        if (!fileName || strlen(fileName) < 3) continue;
 
-        if (objectCode >= END){
-            printf(
-                "WARNING: Texture with ID=%d is not one of the known objects, "
-                "will continue without it.\n", objectCode
-            );
+        int objectCode = atoi(fileName + 1);
+        if (objectCode >= TILE_END){
+            printf("WARNING: Texture with ID=%d is not a known object. Skipping.\n", objectCode);
             continue;
         }
 
         textures[objectCode] = LoadTextureFromFile(files.paths[i]);
     }
 
-    for (unsigned int i = 0; i < END; i++){
-        if (!textures[i].height) 
-            printf("WARNING: Couldn't find texture with ID=%d, proceeding without it.\n", i);
+    for (unsigned int i = 0; i < TILE_END; i++){
+        if (!textures[i].height) printf("WARNING: Texture ID=%d is missing.\n", i);
     }
 
     UnloadDirectoryFiles(files);
 }
 
-//Function that updates an animation and draws it into the specified coordinates
-void Animate(Animation* anim, int posX, int posY, Color color, bool halved){
-    //Update animation
-    anim->frameTimer += deltaTime;
-    if (anim->frameTimer >= anim->frameDuration){
-        anim->frameTimer = 0.0f;
-        anim->currentFrame++;
-        if (anim->currentFrame >= anim->frameCount){
-            anim->currentFrame = 0;
-        }
-    }
+// Draws a texture with the specified rotation
+void DrawRotatedTexture(Texture2D texture, Vector2 position, int rotation, Color color){
+    Vector2 origin = (Vector2){ HALF_SIZE, HALF_SIZE };
+    Rectangle src = { 0, 0, texture.width, texture.height };
+    Rectangle dst = { position.x, position.y, texture.width, texture.height };
+    DrawTexturePro(texture, src, dst, origin, rotation, color);
+}
 
-    //Draw animation
-    int totalFrames = anim->texture->width / anim->frameWidth;
-    int frameX      = anim->currentFrame % totalFrames * anim->frameWidth;
-    int frameY      = anim->currentFrame / totalFrames * anim->frameHeight + anim->startingRow;
+// Initializes Animation with the informed values
+static inline Animation InitAnimValues(Texture2D *texture, int startRow, float duration){
+    int cols = texture->width / TILE_SIZE;
+    int rows = texture->height / TILE_SIZE;
+
+    Animation anim = {
+        .texture          = texture,
+        .startRow         = startRow,
+        .frameWidth       = TILE_SIZE,
+        .frameHeight      = TILE_SIZE,
+        .frameCount       = cols * rows,
+        .currentFrame     = 0,
+        .frameDuration    = duration,
+        .elapsedTime      = 0.0f,
+        .rotation         = 0.0f,
+        .durationModifier = 1
+    };
+    return anim;
+};
+
+// Updates the animation frame and rotation based on the elapsed time
+static inline void UpdateAnimation(Animation *anim, float rotationMod){
+    anim->elapsedTime += deltaTime;
+    if (anim->elapsedTime >= anim->frameDuration / anim->durationModifier){
+        anim->elapsedTime = 0.0f;
+        anim->currentFrame = (anim->currentFrame + 1) % anim->frameCount;
+        anim->rotation = (anim->rotation == 360 ? rotationMod : anim->rotation + rotationMod);
+    }
+}
+
+// Function that updates an animation and draws it into the specified coordinates
+void DrawAnimation(Animation *anim, Vector2 pos, Color color, bool halved){
+    UpdateAnimation(anim, 0.0f);
+
+    // Find, within the texture, the coordinates of the frame that will be displayed
+    int framesPerRow = anim->texture->width / anim->frameWidth;
+
+    int frameColumn = anim->currentFrame % framesPerRow;
+    int frameRow    = anim->currentFrame / framesPerRow;
+
+    int frameX = frameColumn * anim->frameWidth;
+    int frameY = frameRow * anim->frameHeight + anim->startRow;
 
     Rectangle source = { frameX, frameY, anim->frameWidth, anim->frameHeight };
-    Rectangle dest   = {  posX ,  posY , anim->frameWidth, anim->frameHeight };
-    Vector2 origin   = { 0 };
+    Rectangle dest   = { pos.x, pos.y, anim->frameWidth, anim->frameHeight };
+    Vector2   origin = { 0 };
 
     if (halved) source.height = dest.height = anim->frameHeight / 2;
 
     DrawTexturePro(*anim->texture, source, dest, origin, anim->rotation, color);
 }
 
-//Function that updates rotates a sprite and draws the result into the specified coordinates
-void Rotate(Animation* anim, int posX, int posY, Color color, float degrees, int increment){
-    //Update animation
-    anim->frameTimer += deltaTime;
-    if (anim->frameTimer >= anim->frameDuration){
-        anim->frameTimer = 0.0f;
-        anim->rotation = (anim->rotation == 360 ? degrees : anim->rotation + degrees);
-    }
-
-    //Draw animation
-    int totalFrames = anim->texture->width / anim->frameWidth;
-    int frameX      = anim->currentFrame % totalFrames * anim->frameWidth;
-    int frameY      = anim->currentFrame / totalFrames * anim->frameHeight + anim->startingRow;
-
-    Rectangle source = {      frameX     ,      frameY     , anim->frameWidth, anim->frameHeight };
-    Rectangle dest   = { posX + HALF_SIZE, posY + HALF_SIZE, anim->frameWidth, anim->frameHeight };
-    Vector2   origin = { HALF_SIZE, HALF_SIZE };
-
-    DrawTexturePro(*anim->texture, source, dest, origin, anim->rotation + increment, color);
+// Function that updates rotates a sprite and draws the result into the specified coordinates
+void RotateAndDrawAnimation(Animation* anim, Vector2 position, Color color){
+    Vector2 dst = { position.x + HALF_SIZE, position.y + HALF_SIZE };
+    DrawRotatedTexture(*anim->texture, dst, anim->rotation, color);
 }
 
-//Draws every element from the loaded map
-void DrawMap(
-    const CSV *map,
-    void *data[],
-    const int dataLength[],
-    const Texture2D textures[],
-    Animation *animPlayer,
-    Animation *animPortal
-){
-    //Draw Walls
-    for (int i = 0; i < dataLength[WALL]; i++){
-        Vector2 *walls = (Vector2 *)data[WALL];
-        DrawTexture(textures[WALL], walls[i].x, walls[i].y, GRAY);
+// Draws every element from the loaded map
+void DrawMap(const Map *map, const Texture2D textures[], Animation anim[]){
+    // Walls
+    Vector2 *walls = (Vector2 *)map->objects[TILE_WALL];
+    for (unsigned int i = 0; i < map->length[TILE_WALL]; i++){
+        DrawTextureV(textures[TILE_WALL], walls[i], GRAY);
     }
 
-    //Draw Puddles
-    for (int i = 0; i < dataLength[PUDDLE]; i++){
-        Vector2 *puddles = (Vector2 *)data[PUDDLE];
-        DrawRectangle(puddles[i].x, puddles[i].y, TILE_SIZE, TILE_SIZE, BLUE);
+    // Puddles
+    Vector2 *puddles = (Vector2 *)map->objects[TILE_PUDDLE];
+    for (unsigned int i = 0; i < map->length[TILE_PUDDLE]; i++){
+        DrawRectangleV(puddles[i], (Vector2){ TILE_SIZE, TILE_SIZE }, BLUE);
     }
 
-    //Draw Conveyor Belts
-    for (int i = 0; i < dataLength[CONVEYOR]; i++){
-        DirItem *conveyors = (DirItem *)data[CONVEYOR];
+    // Conveyor Belts
+    DirItem *conveyors = (DirItem *)map->objects[TILE_CONVEYOR];
+    for (unsigned int i = 0; i < map->length[TILE_CONVEYOR]; i++){
         int rotation = (conveyors[i].dir * 90) - 90;
-        DrawTexturePro(textures[CONVEYOR], (Rectangle){ 0, 0, textures[CONVEYOR].width, textures[CONVEYOR].height }, (Rectangle){conveyors[i].position.x + HALF_SIZE, conveyors[i].position.y + HALF_SIZE, (float)textures[CONVEYOR].width, (float)textures[CONVEYOR].height}, (Vector2){HALF_SIZE, HALF_SIZE}, rotation, WHITE);
+
+        Vector2 position = (Vector2){
+            conveyors[i].position.x + HALF_SIZE,
+            conveyors[i].position.y + HALF_SIZE
+        };
+
+        DrawRotatedTexture(textures[TILE_CONVEYOR], position, rotation, WHITE);
     }
 
-    //Draw Doors
-    Rectangle doorFrameRec = { 0.0f, 0.0f, textures[DOOR].width/2, textures[DOOR].height };
-    for (int i = 0; i < dataLength[DOOR]; i++){
-        Item *doors = (Item *)data[DOOR];
-        if (doors[i].active) doorFrameRec.x = 64;
-        DrawTextureRec(textures[DOOR], doorFrameRec, doors[i].position, WHITE);
+    // Doors
+    Item *doors = (Item *)map->objects[TILE_DOOR];
+    Rectangle doorFrame = { 0.0f, 0.0f, textures[TILE_DOOR].width / 2, textures[TILE_DOOR].height };
+    for (unsigned int i = 0; i < map->length[TILE_DOOR]; i++){
+        doorFrame.x = doors[i].isActive ? 64 : 0;
+        DrawTextureRec(textures[TILE_DOOR], doorFrame, doors[i].position, WHITE);
     }
 
-    //Draw Keys
-    for (int i = 0; i < dataLength[KEY]; i++){
-        Item *keys = (Item *)data[KEY];
-        if (!keys[i].active) DrawTexture(textures[KEY], keys[i].position.x, keys[i].position.y, YELLOW);
+    // Keys
+    Item *keys = (Item *)map->objects[TILE_KEY];
+    for (unsigned int i = 0; i < map->length[TILE_KEY]; i++){
+        if (!keys[i].isActive) DrawTextureV(textures[TILE_KEY], keys[i].position, YELLOW);
     }
 
-    //Draw Portals
-    for (int i = 0; i < ((dataLength[PORTAL]/2) - (dataLength[PORTAL] % 2)); i++){
-        Portals *portals = (Portals *)data[PORTAL];
-        Vector2 entrance = portals[i].entrance;
-        Vector2 exit     = portals[i].exit;
+    // Portals
+    Portals *portals = (Portals *)map->objects[TILE_PORTAL];
+    UpdateAnimation(&anim[ANIM_PORTAL], -90.0f);
+    for (unsigned int i = 0; i < map->length[TILE_PORTAL]; i++){
         Color   color    = i&1 ? (Color){ 128, 0, 255, 255 } : GREEN;
-
-        Rotate(animPortal, entrance.x, entrance.y, color, -90, 90 * i);
-        Rotate(animPortal,   exit.x  ,   exit.y  , color, -90, 90 * (i + 1));
+        RotateAndDrawAnimation(&anim[ANIM_PORTAL], portals[i].entrance, color);
+        RotateAndDrawAnimation(&anim[ANIM_PORTAL], portals[i].exit    , color);
     }
 
-    //Draw Player
-    Entity *players = (Entity *)data[PLAYER];
-    int yStart = players[0].box.y / TILE_SIZE, xStart = players[0].box.x / TILE_SIZE;
-    int yEnd = yStart, xEnd = xStart;
-    bool halved = false;
+    // Player
+    Entity *players = (Entity *)map->objects[TILE_PLAYER];
+    char ***array = map->array;
+    int rows = map->rows;
+    int cols = map->cols;
 
-    if (atoi(map->array[yStart][xStart]) == PUDDLE){
-        if (yStart < map->rows && atoi(map->array[yStart+1][ xStart ]) == PUDDLE) yEnd++  ;
-        if (xStart < map->cols && atoi(map->array[ yStart ][xStart+1]) == PUDDLE) xEnd++  ;
-        if (yStart >     0     && atoi(map->array[yStart-1][ xStart ]) == PUDDLE) yStart--;
-        if (xStart >     0     && atoi(map->array[ yStart ][xStart-1]) == PUDDLE) xStart--;
+    bool halved = false;
+    int gridX = players[0].box.x / TILE_SIZE;
+    int gridY = players[0].box.y / TILE_SIZE;
+    int minY, maxY, minX, maxX;
+    minY = maxY = gridY;
+    minX = maxX = gridX;
+
+    if (atoi(array[gridY][gridX]) == TILE_PUDDLE){ // Checks if player is inside puddle
+        if (gridY < rows) maxY += atoi(array[gridY+1][ gridX ]) == TILE_PUDDLE;
+        if (gridX < cols) maxX += atoi(array[ gridY ][gridX+1]) == TILE_PUDDLE;
+        if (gridY > 0)    minY -= atoi(array[gridY-1][ gridX ]) == TILE_PUDDLE;
+        if (gridX > 0)    minX -= atoi(array[ gridY ][gridX-1]) == TILE_PUDDLE;
 
         if (
-            players[0].spr.x >= xStart * TILE_SIZE && players[0].spr.x <= xEnd * TILE_SIZE &&
-            players[0].spr.y >= yStart * TILE_SIZE && players[0].spr.y <= yEnd * TILE_SIZE
+            players[0].spr.x >= minX * TILE_SIZE &&
+            players[0].spr.x <= maxX * TILE_SIZE &&
+            players[0].spr.y >= minY * TILE_SIZE &&
+            players[0].spr.y <= maxY * TILE_SIZE
         ) halved = true;
     }
+    DrawAnimation(&anim[ANIM_PLAYER], players[0].spr, BLUE, halved);
 
-    DrawRectangle(players[0].box.x, players[0].box.y, TILE_SIZE, TILE_SIZE, GRAY);
-    Animate(animPlayer, players[0].spr.x, players[0].spr.y, BLUE, halved);
-
-    //Draw crates
-    for (int i = 0; i < dataLength[CRATE]; i++){
-        Entity *crates = (Entity *)data[CRATE];
-        //DrawRectangle(crates[i].box.x, crates[i].box.y, TILE_SIZE, TILE_SIZE, WHITE);
-        DrawTexture(textures[CRATE], crates[i].spr.x, crates[i].spr.y, BROWN);
+    // Crates
+    Entity *crates = (Entity *)map->objects[TILE_CRATE];
+    for (unsigned int i = 0; i < map->length[TILE_CRATE]; i++){
+        DrawTextureV(textures[TILE_CRATE], crates[i].spr, BROWN);
     }
 }
 
-void DrawCursor(Texture2D texture, Vector2 cursor, Vector2 origin, int rotation, Color color){
-    Rectangle source = {    0    ,    0    , texture.width, texture.height };
-    Rectangle dest   = { cursor.x, cursor.y, texture.width, texture.height };
+static void RenderGame(Map *map, Assets assets, ScreenContext ctx){
+    HideCursor();
+    BeginDrawing();
+    ClearBackground(BLACK);
+    BeginMode2D(*ctx.camera);
 
-    DrawTexturePro(texture, source, dest, origin, rotation, color);
+    Vector2 UIPosition = (Vector2){
+        ctx.camera->target.x + UI_TEXT_OFFSET_X,
+        ctx.camera->target.y + UI_TEXT_OFFSET_Y
+    };
+
+    DrawMap(map, assets.textures, assets.anim);
+    DrawText(ctx.keysUI->text, UIPosition.x, UIPosition.y, UI_TEXT_SIZE, WHITE);
+    DrawRotatedTexture(assets.textures[0], ctx.mouse.position, ctx.mouse.angle, WHITE);
 }

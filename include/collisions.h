@@ -1,194 +1,213 @@
 #pragma once
 
+#include <core_defs.h>
+#include <types.h>
 #include <string.h>
-#include <defndec.h>
-#include <csv.h>
+#include <map_data.h>
 
-// Returns true if point1's coordinates are equal to point2's
-bool CheckCollisionPoints(Vector2 point1, Vector2 point2){
-    return (point1.x == point2.x && point1.y == point2.y);
+// Returns true if a's coordinates are equal to b's
+static inline bool CheckCollisionPoints(Vector2 a, Vector2 b){
+    return a.x == b.x && a.y == b.y;
 }
 
 // Returns true if block1's coordinates are equal to block2's
-void CheckCollisionPortals(
-    Entity *entity, const Portals portal, const Direction goToDir, int *timer, bool isObj, CSV *map
-){
-    bool isCollidingEntrance = CheckCollisionPoints(entity->box, portal.entrance);
-    bool isCollidingExit = CheckCollisionPoints(entity->box, portal.exit);
+void HandleCollisionPortals(Map *map, Entity *entity, const Portals portal, MoveParams *move, bool isObj){
+    if (!CheckCollisionPoints(entity->box, entity->spr)) return;
 
-    if (CheckCollisionPoints(entity->box, entity->spr) && (isCollidingEntrance || isCollidingExit)){
-        Vector2 targetPosition = (isCollidingEntrance ? portal.exit : portal.entrance);
+    bool atEntrance = CheckCollisionPoints(entity->box, portal.entrance);
+    bool atExit     = CheckCollisionPoints(entity->box, portal.exit    );
+    if (!atEntrance && !atExit) return;
 
-        int offsetY = DetectDestinationDir(goToDir, false);
-        int offsetX = DetectDestinationDir(goToDir, true);
-        int prevPosY = (entity->box.y / TILE_SIZE) - offsetY;
-        int prevPosX = (entity->box.x / TILE_SIZE) - offsetX;
+    Vector2 target = (atEntrance ? portal.exit : portal.entrance);
 
-        entity->spr = entity->box = targetPosition;
-        entity->box.y += offsetY * TILE_SIZE;
-        entity->box.x += offsetX * TILE_SIZE;
-        *timer = TILE_SIZE;
+    int deltaY = GetDirectionDelta(move->dir, false);
+    int deltaX = GetDirectionDelta(move->dir, true );
+    int oldY = (entity->box.y / TILE_SIZE) - deltaY;
+    int oldX = (entity->box.x / TILE_SIZE) - deltaX;
 
-        if (isObj){
-            int newPosX = (int)entity->box.x / TILE_SIZE;
-            int newPosY = (int)entity->box.y / TILE_SIZE;
+    entity->spr = entity->box = target;
+    entity->box.y += deltaY * TILE_SIZE;
+    entity->box.x += deltaX * TILE_SIZE;
+    move->timer = TILE_SIZE;
 
-            int oldIndex = map->dataIndex[prevPosY][prevPosX];
-            map->dataIndex[prevPosY][prevPosX] = map->dataIndex[newPosY][newPosX];
-            map->dataIndex[newPosY][newPosX] = oldIndex;
-            
-            strcpy(map->array[prevPosY][prevPosX], "00");
-            strcpy(map->array[newPosY][newPosX], "03");
-        }
+    if (!isObj) return;
+
+    int newX = entity->box.x / TILE_SIZE;
+    int newY = entity->box.y / TILE_SIZE;
+
+    int oldIndex = map->dataIndex[oldY][oldX];
+    map->dataIndex[oldY][oldX] = map->dataIndex[newY][newX];
+    map->dataIndex[newY][newX] = oldIndex;
+
+    memcpy(map->array[oldY][oldX], "00", CELL_SIZE + 1);
+    memcpy(map->array[newY][newX], "03", CELL_SIZE + 1);
+}
+
+// Moves an Entity across the level
+void MoveEntity(Entity *entity, int speed){
+    if (entity->spr.y != entity->box.y){
+        entity->spr.y += CompareF(entity->box.y, entity->spr.y) * speed;
+    } else if (entity->spr.x != entity->box.x){
+        entity->spr.x += CompareF(entity->box.x, entity->spr.x) * speed;
     }
 }
 
-void Slide(Entity *entity, int speed){
-    if (entity->spr.y != entity->box.y) {
-        entity->spr.y += IsHigherOrLower(entity->box.y, entity->spr.y) * speed;
-    } else if (entity->spr.x != entity->box.x) {
-        entity->spr.x += IsHigherOrLower(entity->box.x, entity->spr.x) * speed;
-    }
-}
+// Moves all entities across the level
+void MoveAllEntities(Map *map, MoveParams *move){
+    Entity *players = (Entity *)map->objects[TILE_PLAYER];
+    Entity *crates  = (Entity *)map->objects[TILE_CRATE];
 
-void Move(void **data, int *timer, int speed, int dataLength[]){
-    Entity *players = (Entity *)data[PLAYER];
-    Entity *crates = (Entity *)data[CRATE];
-
-    if (*timer > 0){
-        //Slide crate
-        for (int i = 0; i < dataLength[CRATE]; i++){
-            Slide(&crates[i], speed);
+    if (move->timer > 0){
+        for (unsigned int i = 0; i < map->length[TILE_CRATE]; i++){
+            MoveEntity(&crates[i], move->speed);
         }
 
-        //Slide player
-        Slide(&players[0], speed);
-        *timer -= speed;
-    } else {
-        players[0].spr = players[0].box;
-
-        for (int i = 0; i < dataLength[CRATE]; i++){
-            if (!CheckCollisionPoints(crates[i].box, crates[i].spr)){
-                crates[i].box = crates[i].spr;
-            }
-        }
-        *timer = 0;
-    }
-}
-
-void HandlePreCollisions(TileInfo *tile, CSV *map, void **data, UI_Element *keysUI, int *timer){
-    // Collision testing map boundaries
-    Entity *players = (Entity *)data[PLAYER];
-    if (!IsInsideMap((Vector2){ tile->x, tile->y }, *map, false)) {
-        players[0].box = players[0].spr;
-        *timer = 0;
+        MoveEntity(&players[0], move->speed);
+        move->timer -= move->speed;
         return;
     }
 
-    //
-    strcpy(tile->code, map->array[tile->y][tile->x]);
-    tile->index = map->dataIndex[tile->y][tile->x];
+    players[0].spr = players[0].box;
 
-    if (isdigit(*tile->code)){
-        switch (atoi(tile->code)){
-            case WALL:
-                players[0].box = players[0].spr;
-                *timer = 0;
-                break;
-
-            case CRATE:
-                Entity    *crates    =  (Entity *)data[CRATE];
-                if (CheckCollisionPoints(crates[tile->index].box, players[0].box)) {
-                    if (!CheckCollisionPoints(players[0].box, players[0].spr)) {
-                        crates[tile->index].box.y += IsHigherOrLower(players[0].box.y, players[0].spr.y) * TILE_SIZE;
-                        crates[tile->index].box.x += IsHigherOrLower(players[0].box.x, players[0].spr.x) * TILE_SIZE;
-                    }
-
-                    int crateY = crates[tile->index].box.y / TILE_SIZE;
-                    int crateX = crates[tile->index].box.x / TILE_SIZE;
-                    bool isInsideBounds = IsInsideMap((Vector2){ crateX, crateY }, *map, false);
-                    int cratePosition = (isInsideBounds ? atoi(map->array[crateY][crateX]) : -1);
-
-                    if (!isInsideBounds || map->array[crateY][crateX][0] == 'C' ||
-                        (cratePosition != EMPTY && cratePosition != PORTAL)) {
-                        players[0].box = players[0].spr;
-                        crates[tile->index].box = crates[tile->index].spr;
-                        *timer = 0;
-                    } else {
-                        if (map->array[crateY][crateX][0] != 'P') {
-                            map->dataIndex[tile->y][tile->x] = map->dataIndex[crateY][crateX];
-                            map->dataIndex[crateY][crateX] = tile->index;
-                            strcpy(map->array[tile->y][tile->x], "00");
-                            strcpy(map->array[crateY][crateX], "03");
-                        }
-                    }
-                }
-                break;
+    for (unsigned int i = 0; i < map->length[TILE_CRATE]; i++){
+        if (!CheckCollisionPoints(crates[i].box, crates[i].spr)){
+            crates[i].box = crates[i].spr;
         }
     }
-
-    tile->index = map->dataIndex[tile->y][tile->x];
-
-    // Collision testing door
-    Item *doors = (Item *)data[DOOR];
-    if (atoi(tile->code) == DOOR && !doors[tile->index].active &&
-        CheckCollisionPoints(players[0].box, doors[tile->index].position)) {
-        if (keysUI->counter) {
-            doors[tile->index].active = true;
-            (keysUI->counter)--;
-            snprintf(keysUI->display, sizeof(keysUI->display), "Keys: %d", keysUI->counter);
-        } else {
-            players[0].box = players[0].spr;
-            *timer = 0;
-        }
-    }
+    move->timer = 0;
 }
 
-void HandlePostCollisions(
-    TileInfo *tile,
-    CSV *map,
-    void **data,
-    int dataLength[],
-    Direction *goToDir,
-    UI_Element *keysUI,
-    int *timer
-){
-    Entity  *players =  (Entity *)data[PLAYER];
-    Portals *portals = (Portals *)data[PORTAL];
-    Entity  *crates  =  (Entity *)data[CRATE];
+// Handles collisions logic that happens before the Entity sprites start moving
+void HandlePreMoveCollisions(TileInfo *tile, Map *map, UIElement *keysUI, MoveParams *move){
+    Entity *players = (Entity *)map->objects[TILE_PLAYER];
+    Entity *crates  = (Entity *)map->objects[TILE_CRATE ];
+    Item   *doors   = (Item   *)map->objects[TILE_DOOR  ];
+
+    bool halt = false;
+    int x = tile->x;
+    int y = tile->y;
+
+    // Testing map boundaries
+    if (!IsWithinMapBounds((Vector2){ x, y }, *map)){
+        players[0].box = players[0].spr;
+        move->timer = 0;
+        return;
+    }
+
+    memcpy(tile->code, map->array[y][x], CELL_SIZE + 1);
+    tile->index = map->dataIndex[y][x];
+
+    int tileID = isdigit(*tile->code) ? atoi(tile->code) : -1;
+    int index = tile->index;
+
+    switch (tileID){
+        case TILE_WALL:{
+            halt = true;
+            break;
+        }
+        case TILE_CRATE:{
+            if (!CheckCollisionPoints(crates[index].box, players[0].box)) break;
+
+            if (!CheckCollisionPoints(players[0].box, players[0].spr)){
+                float deltaX = GetDirectionDelta(move->dir, true ) * TILE_SIZE;
+                float deltaY = GetDirectionDelta(move->dir, false) * TILE_SIZE;
+
+                crates[index].box.x += deltaX;
+                crates[index].box.y += deltaY;
+            }
+
+            int crateY = crates[index].box.y / TILE_SIZE;
+            int crateX = crates[index].box.x / TILE_SIZE;
+            
+            if (!IsWithinMapBounds((Vector2){ crateX, crateY }, *map)){
+                halt = true;
+                crates[index].box = crates[index].spr;
+                return;
+            };
+
+            int posID = atoi(map->array[crateY][crateX]);
+            char posCode = map->array[crateY][crateX][0];
+
+            if (posCode == 'C' || (posID != TILE_EMPTY && posID != TILE_PORTAL)){
+                halt = true;
+                crates[index].box = crates[index].spr;
+                break;
+            }
+
+            if (posCode == 'P') return;
+
+            map->dataIndex[y][x] = map->dataIndex[crateY][crateX];
+            map->dataIndex[crateY][crateX] = index;
+            memcpy(map->array[y][x], "00", CELL_SIZE + 1);
+            memcpy(map->array[crateY][crateX], "03", CELL_SIZE + 1);
+            break;
+        }
+        case TILE_DOOR:{
+            if (doors[index].isActive) break;
+
+            if (!keysUI->value){
+                halt = true;
+                break;
+            }
+
+            doors[index].isActive = true;
+            (keysUI->value)--;
+            snprintf(keysUI->text, sizeof(keysUI->text), "Keys: %d", keysUI->value);
+            break;
+        }
+    }
+
+    if (halt){
+        players[0].box = players[0].spr;
+        move->timer = 0;
+    }
+
+    tile->index = map->dataIndex[y][x];
+}
+
+void HandlePostMoveCollisions(TileInfo *tile, Map *map, UIElement *keysUI, MoveParams *move){
+    Entity  *players = (Entity  *)map->objects[TILE_PLAYER];
+    Portals *portals = (Portals *)map->objects[TILE_PORTAL];
+    Entity  *crates  = (Entity  *)map->objects[TILE_CRATE ];
 
     // Collide with portals
-    if (tile->code[0] == 'P') CheckCollisionPortals(&players[0], portals[tile->index], *goToDir, timer, false, map);
-    for (int i = 0; i < dataLength[CRATE]; i++){
-        if (map->array[(int)crates[i].box.y / TILE_SIZE][(int)crates[i].box.x / TILE_SIZE][0] == 'P'){
-            int index = map->dataIndex[(int)crates[i].box.y / TILE_SIZE][(int)crates[i].box.x / TILE_SIZE];
-            CheckCollisionPortals(&crates[i], portals[index], *goToDir, timer, true, map);
+    if (tile->code[0] == 'P'){
+        HandleCollisionPortals(map, &players[0], portals[tile->index], move, false);
+    }
+
+    for (int i = 0; i < map->length[TILE_CRATE]; i++){
+        int x = crates[i].box.x / TILE_SIZE;
+        int y = crates[i].box.y / TILE_SIZE;
+
+        if (map->array[y][x][0] == 'P'){
+            int index = map->dataIndex[y][x];
+            HandleCollisionPortals(map, &crates[i], portals[index], move, true);
         }
     }
 
-    //Collision testing conveyor belt
-    if (tile->code[0] == 'C' && !*timer){
-        *goToDir = (Direction)(tile->code[1]-'0');
-        players[0].box.y += (DetectDestinationDir(*goToDir, false) * TILE_SIZE);
-        players[0].box.x += (DetectDestinationDir(*goToDir, true) * TILE_SIZE);
-        *timer = TILE_SIZE;
+    // Collision testing conveyor belt
+    if (tile->code[0] == 'C' && !move->timer){
+        move->dir = (Direction)(tile->code[1] - '0');
+        players[0].box.y += GetDirectionDelta(move->dir, false) * TILE_SIZE;
+        players[0].box.x += GetDirectionDelta(move->dir, true ) * TILE_SIZE;
+        move->timer = TILE_SIZE;
     }
 
-    //Collect key
-    Item *keys = (Item *)data[KEY];
+    // Collect key
+    Item *keys = (Item *)map->objects[TILE_KEY];
     if (
-        atoi(tile->code) == KEY &&
-        !keys[tile->index].active &&
+        atoi(tile->code) == TILE_KEY &&
+        !keys[tile->index].isActive &&
         CheckCollisionPoints(players[0].spr, keys[tile->index].position)
     ){
-        keys[tile->index].active = true;
-        keysUI->counter++;
-        snprintf(keysUI->display, sizeof(keysUI->display), "Keys: %d", keysUI->counter);
+        keys[tile->index].isActive = true;
+        keysUI->value++;
+        snprintf(keysUI->text, sizeof(keysUI->text), "Keys: %d", keysUI->value);
     }
 }
 
-void MoveAndCollide(TileInfo *currentTile, CSV *map, void **data, int dataLength[], UI_Element *keysUI, Direction *goToDir, int speed, int *timer){
-    HandlePreCollisions(currentTile, map, data, keysUI, timer);
-    Move(data, timer, speed, dataLength);
-    HandlePostCollisions(currentTile, map, data, dataLength, goToDir, keysUI, timer);
+void MoveAndCollide(TileInfo *tile, Map *map, UIElement *keysUI, MoveParams *move){
+    HandlePreMoveCollisions(tile, map, keysUI, move);
+    MoveAllEntities(map, move);
+    HandlePostMoveCollisions(tile, map, keysUI, move);
 }

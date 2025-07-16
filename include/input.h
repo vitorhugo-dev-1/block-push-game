@@ -1,74 +1,76 @@
 #pragma once
 
+#include <core_defs.h>
+#include <types.h>
 #include <raylib.h>
-#include <defndec.h>
-#include <csv.h>
+#include <map_data.h>
 
-//Checks if any of the passed keys are pressed
-int IsAnyOfKeysPressed(int *keys){
-    for (int i = 0; keys[i] != -1; i++){
+// Returns the first pressed key from the list, or KEY_NULL if none are pressed
+int IsAnyOfKeysPressed(const int *keys, size_t length){
+    for (size_t i = 0; i < length; i++){
         if (IsKeyDown(keys[i])) return keys[i];
     }
-    return 0;
+    return KEY_NULL;
 }
 
-void InitiateMovement(int keyPressed, Direction *goToDir, int *timer, Entity *entity){
+// Initiates movement for an entity based on the pressed key
+void InitiateMovement(int keyPressed, MoveParams *move, Entity *entity){
     switch (keyPressed){
-        case KEY_W: case KEY_UP:    { *goToDir = UP;    break; }
-        case KEY_S: case KEY_DOWN:  { *goToDir = DOWN;  break; }
-        case KEY_A: case KEY_LEFT:  { *goToDir = LEFT;  break; }
-        case KEY_D: case KEY_RIGHT: { *goToDir = RIGHT; break; }
-        default: *goToDir = NOWHERE; break;
+        case KEY_W: case KEY_UP:    move->dir = DIR_UP;    break;
+        case KEY_S: case KEY_DOWN:  move->dir = DIR_DOWN;  break;
+        case KEY_A: case KEY_LEFT:  move->dir = DIR_LEFT;  break;
+        case KEY_D: case KEY_RIGHT: move->dir = DIR_RIGHT; break;
+        default:                    move->dir = DIR_NONE;  return;
     }
 
-    entity->box.y += (DetectDestinationDir(*goToDir, false) * TILE_SIZE);
-    entity->box.x += (DetectDestinationDir(*goToDir, true)  * TILE_SIZE);
-    *timer = TILE_SIZE;
+    entity->box.y += GetDirectionDelta(move->dir, false) * TILE_SIZE;
+    entity->box.x += GetDirectionDelta(move->dir, true ) * TILE_SIZE;
+    move->timer = TILE_SIZE;
 }
 
+// Spawns a projectile in the first available slot
 void ShootProjectile(DirItem *projectiles, Vector2 position, Direction direction){
-    for (int i = 0; i < MAX_SHOTS; i++){
+    for (unsigned int i = 0; i < MAX_SHOTS; i++){
         if  (projectiles[i].dir) continue;
-
         projectiles[i].position = position;
         projectiles[i].dir      = direction;
-
-        break;
+        return;
     }
 }
 
-void HandleProjectiles(CSV map, DirItem *projectiles){
-    for (int i = 0; i < MAX_SHOTS; i++){
-        if  (!projectiles[i].dir) continue;
+void HandleProjectiles(Map map, DirItem *projectiles){
+    for (unsigned int i = 0; i < MAX_SHOTS; i++){
+        DirItem *proj = &projectiles[i];
+        if  (!proj->dir) continue;
 
-        Vector2 shotTile = {
-            SnapToTile(projectiles[i].position.x),
-            SnapToTile(projectiles[i].position.y)
-        };
+        Vector2 shotTile = { SnapToTile(proj->position.x), SnapToTile(proj->position.y) };
         int PosX = shotTile.x, PosY = shotTile.y;
 
-        if (!IsInsideMap(shotTile, map, true)){
-            projectiles[i].dir = NOWHERE;
-            PosX = PosY = 0;
+        if (!IsWithinMapBounds(shotTile, map)){
+            proj->dir = DIR_NONE;
             continue;
         }
 
-        int currentCode = atoi(map.array[PosY][PosX]);
+        int tileCode = atoi(map.array[PosY][PosX]);
 
-        if (currentCode == PUDDLE){
-            projectiles[i].dir = NOWHERE;
-            zapWater(&map, shotTile);
-            restoreWater(&map, shotTile);
+        if (tileCode == TILE_PUDDLE){
+            proj->dir = DIR_NONE;
+            ZapWater(&map, shotTile);
+            RestoreWater(&map, shotTile);
             continue;
         }
 
-        if (currentCode != PUDDLE && currentCode != EMPTY && currentCode != PLAYER){
-            projectiles[i].dir = NOWHERE;
+        if (
+            tileCode != TILE_PUDDLE &&
+            tileCode != TILE_EMPTY  &&
+            tileCode != TILE_PLAYER
+        ){
+            proj->dir = DIR_NONE;
             continue;
         }
 
-        DrawCircleV(projectiles[i].position, 15, YELLOW);
-        projectiles[i].position.x += (DetectDestinationDir(projectiles[i].dir, true)  * 30);
-        projectiles[i].position.y += (DetectDestinationDir(projectiles[i].dir, false) * 30);
+        DrawCircleV(proj->position, 15.0f, YELLOW);
+        proj->position.x += GetDirectionDelta(proj->dir, true ) * 30.0f;
+        proj->position.y += GetDirectionDelta(proj->dir, false) * 30.0f;
     }
 }
